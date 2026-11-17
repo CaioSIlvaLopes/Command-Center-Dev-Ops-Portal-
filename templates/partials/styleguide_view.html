@@ -1,0 +1,637 @@
+<section
+    id="styleguide-view-section"
+    x-data="{
+        chk1: true,
+        chk2: false,
+        radioOpt: 'opt1',
+        sw1: true,
+        sw2: false,
+        sliderVal: 75,
+        activeTab: 'tab1',
+        activePage: 2,
+        progressPct: 50,
+        showToastDemo: true
+    }"
+    class="space-y-8 pb-8 min-w-0"
+>
+    <!-- Cabeçalho do Style Guide Interativo + Seletor Rápido Dual Theme -->
+    <div class="flex flex-wrap items-center justify-between gap-4 ds-layer-raised ds-r-24 p-4 sm:p-5">
+        <div class="space-y-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="ds-badge ds-badge-urgent">DESIGN SYSTEM v4.1</span>
+                <span class="ds-badge ds-badge-primary">SOFT-NEUMORPHIC / TACTILE UI</span>
+            </div>
+            <h2 class="text-base sm:text-xl font-bold tracking-tight ds-text-primary">
+                Command Center &mdash; Tactile UI Design System &amp; Live Showcase
+            </h2>
+            <p class="text-xs ds-text-secondary">
+                Física de elevação real, chanfro de luz superior (<code class="font-mono ds-accent-text">--ds-bevel-light</code>), cavidades entalhadas (<code class="font-mono ds-accent-text">.ds-layer-inset</code>) e motor Dual-Theme instantâneo.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 ds-layer-inset ds-r-16 p-1.5">
+            <button
+                type="button"
+                @click="theme = 'tactile-dark'; localStorage.setItem('cc_theme', 'tactile-dark'); document.documentElement.setAttribute('data-theme', 'tactile-dark')"
+                :class="theme === 'tactile-dark' ? 'ds-btn-primary font-bold' : 'ds-text-secondary hover:ds-text-primary'"
+                class="px-3 py-1.5 ds-r-12 text-xs font-mono transition"
+            >
+                Tactile Dark (#0f172a)
+            </button>
+            <button
+                type="button"
+                @click="theme = 'tactile-sand'; localStorage.setItem('cc_theme', 'tactile-sand'); document.documentElement.setAttribute('data-theme', 'tactile-sand')"
+                :class="theme === 'tactile-sand' ? 'ds-btn-urgent font-bold' : 'ds-text-secondary hover:ds-text-primary'"
+                class="px-3 py-1.5 ds-r-12 text-xs font-mono transition"
+            >
+                Tactile Sand (#e8e2d7)
+            </button>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SEÇÃO 1: FOUNDATIONS                                                -->
+    <!-- =================================================================== -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+            <div>
+                <span class="text-[11px] font-mono font-bold uppercase tracking-widest ds-accent-text">01 // ARCHITECTURE</span>
+                <h3 class="text-base font-bold uppercase tracking-wider ds-text-primary">FOUNDATIONS</h3>
+            </div>
+            <span class="ds-badge ds-badge-neutral">Surfaces &bull; Elevation &bull; Borders &bull; Radius &bull; Icons</span>
+        </div>
+
+        <!-- 1.1 Surface Layers: Base Layer, Raised Layer, Inset Layer, Pressed Layer -->
+        <div class="space-y-2.5">
+            <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-secondary">
+                Surface Layers (Física de Superfície)
+            </h4>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div class="ds-layer-base ds-r-16 p-3.5 sm:p-4 space-y-1 min-w-0">
+                    <span class="text-xs font-bold ds-text-primary block">Base Layer</span>
+                    <code class="text-[11px] font-mono ds-accent-text block truncate">.ds-layer-base</code>
+                    <p class="text-[11px] ds-text-secondary">Plano zero da aplicação (<code class="font-mono">--ds-bg-base</code>).</p>
+                </div>
+                <div class="ds-layer-raised ds-r-16 p-3.5 sm:p-4 space-y-1 min-w-0">
+                    <span class="text-xs font-bold ds-text-primary block">Raised Layer</span>
+                    <code class="text-[11px] font-mono ds-accent-text block truncate">.ds-layer-raised</code>
+                    <p class="text-[11px] ds-text-secondary">Camada elevada com chanfro superior de 1px e sombra projetada.</p>
+                </div>
+                <div class="ds-layer-inset ds-r-16 p-3.5 sm:p-4 space-y-1 min-w-0">
+                    <span class="text-xs font-bold ds-text-primary block">Inset Layer</span>
+                    <code class="text-[11px] font-mono ds-accent-text block truncate">.ds-layer-inset</code>
+                    <p class="text-[11px] ds-text-secondary">Cavidade entalhada (sombra interna <code class="font-mono">inset</code>) para bandejas e inputs.</p>
+                </div>
+                <div class="ds-layer-pressed ds-r-16 p-3.5 sm:p-4 space-y-1 min-w-0">
+                    <span class="text-xs font-bold ds-text-primary block">Pressed Layer</span>
+                    <code class="text-[11px] font-mono ds-accent-text block truncate">.ds-layer-pressed</code>
+                    <p class="text-[11px] ds-text-secondary">Estado físico pressionado (<code class="font-mono">translateY(1px)</code> + cavidade).</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.2 5 Elevation Levels (grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4) -->
+        <div class="space-y-2.5">
+            <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-secondary">
+                5 Elevation Levels (Escala de Profundidade)
+            </h4>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div class="ds-layer-hover ds-r-16 p-3.5 text-center space-y-1 min-w-0">
+                    <span class="ds-badge ds-badge-neutral">LEVEL 1</span>
+                    <p class="text-xs font-bold ds-text-primary">Base / Hover</p>
+                    <code class="text-[10px] font-mono ds-text-secondary block truncate">.ds-layer-hover</code>
+                </div>
+                <div class="ds-elevation-2 ds-r-16 p-3.5 text-center space-y-1 min-w-0">
+                    <span class="ds-badge ds-badge-neutral">LEVEL 2</span>
+                    <p class="text-xs font-bold ds-text-primary">Low Surface</p>
+                    <code class="text-[10px] font-mono ds-text-secondary block truncate">.ds-elevation-2</code>
+                </div>
+                <div class="ds-layer-raised ds-r-16 p-3.5 text-center space-y-1 min-w-0">
+                    <span class="ds-badge ds-badge-primary">LEVEL 3</span>
+                    <p class="text-xs font-bold ds-text-primary">Raised Card</p>
+                    <code class="text-[10px] font-mono ds-text-secondary block truncate">.ds-layer-raised</code>
+                </div>
+                <div class="ds-layer-modal ds-r-16 p-3.5 text-center space-y-1 min-w-0">
+                    <span class="ds-badge ds-badge-primary">LEVEL 4</span>
+                    <p class="text-xs font-bold ds-text-primary">Modal / Drawer</p>
+                    <code class="text-[10px] font-mono ds-text-secondary block truncate">.ds-layer-modal</code>
+                </div>
+                <div class="ds-layer-popover ds-r-16 p-3.5 text-center space-y-1 min-w-0">
+                    <span class="ds-badge ds-badge-urgent">LEVEL 5</span>
+                    <p class="text-xs font-bold ds-text-primary">Floating Popover</p>
+                    <code class="text-[10px] font-mono ds-text-secondary block truncate">.ds-layer-popover</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.3 Border Thickness Tokens, Radius Scale & Iconography Rules -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <!-- Border Thickness Tokens -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Border Thickness Tokens
+                </h4>
+                <div class="space-y-2.5">
+                    <div class="px-3 py-2 ds-layer-raised ds-r-8 ds-border-1 flex items-center justify-between gap-2 text-xs font-mono">
+                        <span>hairline / subtle</span>
+                        <strong class="ds-accent-text">1px (.ds-border-1)</strong>
+                    </div>
+                    <div class="px-3 py-2 ds-layer-raised ds-r-8 ds-border-2 flex items-center justify-between gap-2 text-xs font-mono">
+                        <span>focus / active ring</span>
+                        <strong class="ds-accent-text">2px (.ds-border-2)</strong>
+                    </div>
+                    <div class="px-3 py-2 ds-layer-raised ds-r-8 ds-border-4 flex items-center justify-between gap-2 text-xs font-mono">
+                        <span>structural accent</span>
+                        <strong class="ds-accent-text">4px (.ds-border-4)</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Radius Scale (4px to 24px) -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Radius Scale (4px &rarr; 24px)
+                </h4>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-center font-mono text-[10px]">
+                    <div class="ds-layer-raised ds-r-4 p-2.5 flex flex-col items-center justify-center">
+                        <strong class="ds-text-primary">4px</strong>
+                        <span class="ds-text-secondary">r-4</span>
+                    </div>
+                    <div class="ds-layer-raised ds-r-8 p-2.5 flex flex-col items-center justify-center">
+                        <strong class="ds-text-primary">8px</strong>
+                        <span class="ds-text-secondary">r-8</span>
+                    </div>
+                    <div class="ds-layer-raised ds-r-12 p-2.5 flex flex-col items-center justify-center">
+                        <strong class="ds-text-primary">12px</strong>
+                        <span class="ds-text-secondary">r-12</span>
+                    </div>
+                    <div class="ds-layer-raised ds-r-16 p-2.5 flex flex-col items-center justify-center">
+                        <strong class="ds-text-primary">16px</strong>
+                        <span class="ds-text-secondary">r-16</span>
+                    </div>
+                    <div class="ds-layer-raised ds-r-24 p-2.5 flex flex-col items-center justify-center">
+                        <strong class="ds-text-primary">24px</strong>
+                        <span class="ds-text-secondary">r-24</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Iconography Rules (16px, 20px, 24px com stroke: 2px) -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Iconography Rules (stroke: 2px)
+                </h4>
+                <div class="flex items-center justify-around py-2">
+                    <div class="flex flex-col items-center gap-1.5">
+                        <span class="p-2.5 ds-layer-raised ds-r-8 ds-accent-text">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </span>
+                        <span class="text-[10px] font-mono ds-text-secondary">16px (Compact)</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1.5">
+                        <span class="p-2.5 ds-layer-raised ds-r-12 ds-accent-text">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </span>
+                        <span class="text-[10px] font-mono ds-text-secondary">20px (Control)</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1.5">
+                        <span class="p-2.5 ds-layer-raised ds-r-12 ds-urgent-text">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </span>
+                        <span class="text-[10px] font-mono ds-text-secondary">24px (Feature)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SEÇÃO 2: CONTROLS (grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6) -->
+    <!-- =================================================================== -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+            <div>
+                <span class="text-[11px] font-mono font-bold uppercase tracking-widest ds-accent-text">02 // INTERACTIVITY</span>
+                <h3 class="text-base font-bold uppercase tracking-wider ds-text-primary">CONTROLS</h3>
+            </div>
+            <span class="ds-badge ds-badge-primary">Buttons &bull; Inputs &bull; Checkboxes &bull; Switches &bull; Slider</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+            <!-- Bloco 1: Buttons & Text Fields -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-4 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Buttons (Primary, Pressed, Disabled) &amp; Inputs
+                </h4>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button type="button" class="px-3.5 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-semibold">
+                        Primary Action
+                    </button>
+                    <button type="button" class="px-3.5 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-semibold">
+                        Secondary Tactile
+                    </button>
+                    <button type="button" class="px-3.5 py-1.5 ds-layer-pressed ds-r-12 text-xs font-mono font-semibold ds-accent-text">
+                        Pressed State
+                    </button>
+                    <button type="button" class="px-3.5 py-1.5 ds-btn-urgent ds-r-12 text-xs font-mono font-semibold">
+                        Urgent / Top 3
+                    </button>
+                    <button type="button" disabled class="px-3.5 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono opacity-45 cursor-not-allowed">
+                        Disabled
+                    </button>
+                </div>
+
+                <div class="space-y-2.5 pt-2 border-t" style="border-color: var(--ds-border-subtle);">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Normal Text Field</label>
+                        <input type="text" value="Captura #saas" class="w-full ds-input ds-r-12 px-3 py-1.5 text-xs font-mono" readonly />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-accent-text mb-1">Focus Ring (2px)</label>
+                        <input
+                            type="text"
+                            value="Foco ativo 2px"
+                            class="w-full ds-input is-focused ds-r-12 px-3 py-1.5 text-xs font-mono"
+                            readonly
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-urgent-text mb-1">Error State</label>
+                        <input type="text" value="Token inválido" class="w-full ds-input is-error ds-r-12 px-3 py-1.5 text-xs font-mono" readonly />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloco 2: Checkboxes, Radios & Tactile Switches -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-4 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Checkboxes, Radios &amp; Switches (Clicáveis)
+                </h4>
+
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-4 p-3 ds-layer-raised ds-r-12">
+                        <button type="button" @click="chk1 = !chk1" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-checkbox" :class="chk1 ? 'is-checked' : ''">
+                                <svg x-show="chk1" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </span>
+                            <span>Check A</span>
+                        </button>
+                        <button type="button" @click="chk2 = !chk2" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-checkbox" :class="chk2 ? 'is-checked' : ''">
+                                <svg x-show="chk2" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </span>
+                            <span>Check B</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-4 p-3 ds-layer-raised ds-r-12">
+                        <button type="button" @click="radioOpt = 'opt1'" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-radio" :class="radioOpt === 'opt1' ? 'is-selected' : ''"></span>
+                            <span>Turno Manhã</span>
+                        </button>
+                        <button type="button" @click="radioOpt = 'opt2'" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-radio" :class="radioOpt === 'opt2' ? 'is-selected' : ''"></span>
+                            <span>Turno Tarde</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-4 p-3 ds-layer-raised ds-r-12">
+                        <button type="button" @click="sw1 = !sw1" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-switch" :class="sw1 ? 'is-on' : ''"></span>
+                            <span x-text="sw1 ? 'Switch ON' : 'Switch OFF'"></span>
+                        </button>
+                        <button type="button" @click="sw2 = !sw2" class="inline-flex items-center gap-2 text-xs font-mono">
+                            <span class="ds-switch" :class="sw2 ? 'is-on' : ''"></span>
+                            <span x-text="sw2 ? 'Switch ON' : 'Switch OFF'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloco 3: Slider Interativo com Tooltip de Porcentagem (75%) -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-4 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                        Tactile Slider &amp; Tooltip
+                    </h4>
+                    <span class="ds-badge ds-badge-primary" x-text="sliderVal + '%'">75%</span>
+                </div>
+                <p class="text-xs ds-text-secondary">
+                    Arraste o controle abaixo para testar o preenchimento tátil em tempo real:
+                </p>
+                <div class="relative pt-8 pb-2 px-2">
+                    <div
+                        class="absolute top-0 -translate-x-1/2 px-2 py-0.5 ds-layer-popover ds-r-8 text-[10px] font-mono font-bold ds-accent-text"
+                        :style="'left: ' + sliderVal + '%'"
+                        x-text="sliderVal + '%'"
+                    >
+                        75%
+                    </div>
+                    <div class="ds-progress-track">
+                        <div class="ds-progress-fill" :style="'width: ' + sliderVal + '%'"></div>
+                    </div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        x-model="sliderVal"
+                        class="w-full mt-3 accent-[#3b82f6] cursor-pointer"
+                    />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SEÇÃO 3: NAVIGATION                                                 -->
+    <!-- =================================================================== -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+            <div>
+                <span class="text-[11px] font-mono font-bold uppercase tracking-widest ds-accent-text">03 // WAYFINDING</span>
+                <h3 class="text-base font-bold uppercase tracking-wider ds-text-primary">NAVIGATION</h3>
+            </div>
+            <span class="ds-badge ds-badge-neutral">Tabs &bull; Breadcrumbs &bull; Pagination &bull; 4-Step Process</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Tactile Tabs & Breadcrumbs -->
+            <div class="space-y-4 min-w-0">
+                <div class="ds-layer-inset ds-r-16 p-4 space-y-2.5">
+                    <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">Tactile Segmented Tabs</h4>
+                    <div class="overflow-x-auto no-scrollbar flex items-center gap-1.5 ds-layer-base ds-r-12 p-1.5">
+                        <button
+                            type="button"
+                            @click="activeTab = 'tab1'"
+                            :class="activeTab === 'tab1' ? 'ds-layer-raised ds-accent-text font-bold' : 'ds-text-secondary'"
+                            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition"
+                        >
+                            Overview
+                        </button>
+                        <button
+                            type="button"
+                            @click="activeTab = 'tab2'"
+                            :class="activeTab === 'tab2' ? 'ds-layer-raised ds-accent-text font-bold' : 'ds-text-secondary'"
+                            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition"
+                        >
+                            Webhooks
+                        </button>
+                        <button
+                            type="button"
+                            @click="activeTab = 'tab3'"
+                            :class="activeTab === 'tab3' ? 'ds-layer-raised ds-urgent-text font-bold' : 'ds-text-secondary'"
+                            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition"
+                        >
+                            Top 3 Queue
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Breadcrumbs & Pagination -->
+                <div class="ds-layer-inset ds-r-16 p-4 flex flex-wrap items-center justify-between gap-4">
+                    <nav class="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+                        <span class="px-2.5 py-1 ds-layer-raised ds-r-8 ds-text-secondary">Portal</span>
+                        <span class="ds-text-secondary">/</span>
+                        <span class="px-2.5 py-1 ds-layer-raised ds-r-8 ds-text-secondary">#saas</span>
+                        <span class="ds-text-secondary">/</span>
+                        <span class="px-2.5 py-1 ds-btn-primary ds-r-8 font-bold">Deskify</span>
+                    </nav>
+
+                    <div class="flex items-center gap-1.5 font-mono text-xs">
+                        <button type="button" @click="activePage = 1" :class="activePage === 1 ? 'ds-btn-primary' : 'ds-btn-tactile'" class="w-8 h-8 ds-r-8">1</button>
+                        <button type="button" @click="activePage = 2" :class="activePage === 2 ? 'ds-btn-primary' : 'ds-btn-tactile'" class="w-8 h-8 ds-r-8">2</button>
+                        <button type="button" @click="activePage = 3" :class="activePage === 3 ? 'ds-btn-primary' : 'ds-btn-tactile'" class="w-8 h-8 ds-r-8">3</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4-Step Process com Tooltip Superior Responsivo -->
+            <div class="ds-layer-inset ds-r-16 p-4 flex flex-col justify-between space-y-4 min-w-0">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                        4-Step Process (Pipeline Operacional)
+                    </h4>
+                    <span class="ds-badge ds-badge-primary">STEP 3 ACTIVE</span>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+                    <div class="flex flex-col items-center text-center space-y-1.5">
+                        <span class="w-8 h-8 rounded-full inline-flex items-center justify-center ds-btn-primary text-xs font-mono font-bold">1</span>
+                        <span class="text-[11px] font-mono font-semibold ds-text-primary">1. Inbox</span>
+                    </div>
+                    <div class="flex flex-col items-center text-center space-y-1.5">
+                        <span class="w-8 h-8 rounded-full inline-flex items-center justify-center ds-btn-primary text-xs font-mono font-bold">2</span>
+                        <span class="text-[11px] font-mono font-semibold ds-text-primary">2. Fila</span>
+                    </div>
+                    <div class="relative flex flex-col items-center text-center space-y-1.5">
+                        <span class="px-2 py-0.5 ds-layer-popover ds-r-8 text-[9px] font-mono ds-urgent-text font-bold">
+                            EM FOCO
+                        </span>
+                        <span class="w-8 h-8 rounded-full inline-flex items-center justify-center ds-btn-urgent text-xs font-mono font-bold">3</span>
+                        <span class="text-[11px] font-mono font-bold ds-urgent-text">3. Execução</span>
+                    </div>
+                    <div class="flex flex-col items-center text-center space-y-1.5">
+                        <span class="w-8 h-8 rounded-full inline-flex items-center justify-center ds-layer-raised text-xs font-mono ds-text-secondary">4</span>
+                        <span class="text-[11px] font-mono ds-text-secondary">4. Concluído</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SEÇÃO 4: DATA DISPLAY (grid-cols-1 md:grid-cols-2 xl:grid-cols-3)   -->
+    <!-- =================================================================== -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+            <div>
+                <span class="text-[11px] font-mono font-bold uppercase tracking-widest ds-accent-text">04 // INFORMATION DENSITY</span>
+                <h3 class="text-base font-bold uppercase tracking-wider ds-text-primary">DATA DISPLAY</h3>
+            </div>
+            <span class="ds-badge ds-badge-primary">Cards &bull; List Items &bull; Badges &bull; Tooltip &bull; Compact Table Header</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+            <!-- Bloco 1: Tactile Card & Tooltip -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                        Tactile Card &amp; Badges
+                    </h4>
+                    <span class="px-2.5 py-1 ds-layer-popover ds-r-8 text-[10px] font-mono ds-accent-text shrink-0">
+                        Tooltip: SLA 99.8%
+                    </span>
+                </div>
+                <div class="ds-layer-raised ds-r-16 p-4 space-y-2.5">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="ds-badge ds-badge-urgent">TOP #1</span>
+                        <span class="ds-badge ds-badge-primary">#saas</span>
+                        <span class="ds-badge ds-badge-neutral">P:25</span>
+                    </div>
+                    <p class="text-xs font-semibold ds-text-primary">
+                        Refatorar fila multi-tenant com prioridades dinâmicas no Deskify
+                    </p>
+                    <div class="ds-progress-track">
+                        <div class="ds-progress-fill" style="width: 75%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloco 2: List Items com Avatares em Moldura Tátil -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    List Items (Avatares Táteis)
+                </h4>
+                <div class="space-y-2.5">
+                    <div class="flex items-center justify-between gap-2 p-3 ds-layer-raised ds-r-12 min-w-0">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-9 h-9 ds-layer-inset ds-r-pill inline-flex items-center justify-center font-mono text-xs font-bold ds-accent-text shrink-0">
+                                PH
+                            </span>
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold ds-text-primary truncate">Pedro &mdash; Arquitetura</p>
+                                <span class="text-[11px] font-mono ds-text-secondary truncate block">Deskify (#saas)</span>
+                            </div>
+                        </div>
+                        <span class="ds-badge ds-badge-primary shrink-0">P:25</span>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 p-3 ds-layer-raised ds-r-12 min-w-0">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-9 h-9 ds-layer-inset ds-r-pill inline-flex items-center justify-center font-mono text-xs font-bold ds-urgent-text shrink-0">
+                                MN
+                            </span>
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold ds-text-primary truncate">Mônica &mdash; Curva A Shopee</p>
+                                <span class="text-[11px] font-mono ds-text-secondary truncate block">Info Mundi (#ecom)</span>
+                            </div>
+                        </div>
+                        <span class="ds-badge ds-badge-urgent shrink-0">URGENTE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloco 3: Compact Table Header + Tactile Rows -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0 md:col-span-2 xl:col-span-1">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Compact Table Header
+                </h4>
+                <div class="overflow-x-auto w-full">
+                    <div class="min-w-[380px] space-y-2">
+                        <div class="grid grid-cols-12 gap-2 px-3 py-2 ds-layer-raised ds-r-12 text-[10px] font-mono font-bold uppercase tracking-wider ds-text-secondary">
+                            <div class="col-span-5">Repositório</div>
+                            <div class="col-span-3">Frente</div>
+                            <div class="col-span-4 text-right">Status</div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-2 px-3 py-2 ds-layer-base ds-r-12 text-xs font-mono">
+                            <span class="col-span-5 ds-text-primary font-semibold truncate">Sistema-de-Chamado</span>
+                            <span class="col-span-3 ds-accent-text">#saas</span>
+                            <span class="col-span-4 text-right"><span class="ds-badge ds-badge-primary">SYNC</span></span>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-2 px-3 py-2 ds-layer-base ds-r-12 text-xs font-mono">
+                            <span class="col-span-5 ds-text-primary font-semibold truncate">MSCREW-Site</span>
+                            <span class="col-span-3 ds-accent-text">#wsa</span>
+                            <span class="col-span-4 text-right"><span class="ds-badge ds-badge-urgent">TOP 3</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SEÇÃO 5: FEEDBACK (grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6) -->
+    <!-- =================================================================== -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+            <div>
+                <span class="text-[11px] font-mono font-bold uppercase tracking-widest ds-urgent-text">05 // SYSTEM STATES</span>
+                <h3 class="text-base font-bold uppercase tracking-wider ds-text-primary">FEEDBACK</h3>
+            </div>
+            <span class="ds-badge ds-badge-urgent">Modal &bull; Toast Stack &bull; Alert Banner &bull; Linear Progress &bull; Spinner &bull; Empty State</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
+            <!-- 1. Modal Confirmation (com Triângulo de Alerta Tátil) -->
+            <div class="ds-layer-modal ds-r-16 p-5 space-y-3.5 min-w-0">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 ds-layer-inset ds-r-12 inline-flex items-center justify-center ds-urgent-text shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </span>
+                    <div class="min-w-0">
+                        <h4 class="text-xs font-mono font-bold uppercase ds-text-primary">Modal Confirmation</h4>
+                        <p class="text-[11px] ds-text-secondary">Deseja substituir o slot #3 do Top 3 do Dia?</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" class="px-3 py-1.5 ds-btn-tactile ds-r-8 text-xs font-mono">Cancelar</button>
+                    <button type="button" class="px-3 py-1.5 ds-btn-urgent ds-r-8 text-xs font-mono font-bold">Confirmar</button>
+                </div>
+            </div>
+
+            <!-- 2. Toast Stack & Alert Banner -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Toast Stack &amp; Alert Banner
+                </h4>
+
+                <div class="px-3 py-2 ds-layer-raised ds-r-12 ds-top3-card flex items-center justify-between gap-2 text-xs font-mono">
+                    <span class="ds-urgent-text font-semibold truncate">Alerta Shopee: SKU #901</span>
+                    <span class="ds-badge ds-badge-urgent shrink-0">!hoje</span>
+                </div>
+
+                <div class="px-3 py-2 ds-layer-popover ds-r-12 flex items-center justify-between gap-2 text-xs font-mono">
+                    <span class="ds-text-primary truncate">PR #42 sincronizado</span>
+                    <span class="ds-accent-text font-bold shrink-0">200 OK</span>
+                </div>
+            </div>
+
+            <!-- 3. Linear Progress (50%) & Spinner -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3.5 min-w-0">
+                <h4 class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                    Linear Progress (50%) &amp; Spinner
+                </h4>
+                <div class="space-y-2 pt-1">
+                    <div class="flex items-center justify-between text-[11px] font-mono">
+                        <span class="ds-text-secondary">Sincronizando fila...</span>
+                        <span class="inline-flex items-center gap-1.5 ds-accent-text font-bold">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                                <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+                            </svg>
+                            <span>50%</span>
+                        </span>
+                    </div>
+                    <div class="ds-progress-track">
+                        <div class="ds-progress-fill" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Empty State (.ds-layer-inset + ícone 24px stroke: 2px) -->
+            <div class="ds-layer-inset ds-r-16 p-5 flex flex-col items-center justify-center text-center space-y-2 min-w-0">
+                <span class="w-11 h-11 ds-layer-raised ds-r-12 inline-flex items-center justify-center ds-accent-text">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                </span>
+                <h4 class="text-xs font-mono font-bold uppercase ds-text-primary">Empty State (Cavidade Inset)</h4>
+                <p class="text-xs ds-text-secondary max-w-[220px]">
+                    Nenhuma pendência crítica. Utilize <kbd class="px-1.5 py-0.5 ds-layer-raised ds-r-4 text-[10px] font-mono">Ctrl+K</kbd> para capturar novas demandas.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>

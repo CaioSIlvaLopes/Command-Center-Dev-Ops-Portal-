@@ -1,0 +1,174 @@
+<section id="shift-queue-section" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-7 h-7 ds-layer-raised ds-r-8 ds-accent-text">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </span>
+            <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary">
+                Fila de Execução por Turnos
+            </h2>
+        </div>
+        <span class="text-xs font-mono ds-text-secondary">
+            Arraste pelo ícone <code class="ds-text-primary">::</code> entre turnos ou clique no título para abrir detalhes
+        </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
+        <!-- COLUNA 1: MANHÃ (DEEP WORK) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2.5 mb-3 ds-layer-raised ds-r-12">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: var(--ds-accent-primary);"></span>
+                    <div class="min-w-0">
+                        <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary truncate">Manhã &bull; Deep Work</h3>
+                        <p class="text-[11px] ds-text-secondary truncate">Arquitetura, Código, SaaS &amp; Clientes</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-badge-primary shrink-0">
+                    {{ morning_tasks|length }}
+                </span>
+            </div>
+
+            <div data-sortable-shift="morning" class="space-y-3 min-h-[120px]">
+                {% for task in morning_tasks %}
+                    {% include "partials/shift_task_card.html" with task=task %}
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 p-6 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="text-xs ds-text-secondary">Arraste tarefas para o turno da manhã.</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- COLUNA 2: TARDE (OPS / E-COM) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2.5 mb-3 ds-layer-raised ds-r-12">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: var(--ds-accent-secondary);"></span>
+                    <div class="min-w-0">
+                        <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary truncate">Tarde &bull; Ops / E-com</h3>
+                        <p class="text-[11px] ds-text-secondary truncate">Shopee, Mercado Livre, Expedição &amp; Gestão</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-badge-urgent shrink-0">
+                    {{ afternoon_tasks|length }}
+                </span>
+            </div>
+
+            <div data-sortable-shift="afternoon" class="space-y-3 min-h-[120px]">
+                {% for task in afternoon_tasks %}
+                    {% include "partials/shift_task_card.html" with task=task %}
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 p-6 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    <span class="text-xs ds-text-secondary">Arraste tarefas para o turno da tarde.</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- COLUNA 3: NOITE (ESTUDOS / GAMES) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2.5 mb-3 ds-layer-raised ds-r-12">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: var(--ds-accent-primary);"></span>
+                    <div class="min-w-0">
+                        <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary truncate">Noite &bull; Estudos / Games</h3>
+                        <p class="text-[11px] ds-text-secondary truncate">Faculdade SI, Pesquisa &amp; Game Dev</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-badge-primary shrink-0">
+                    {{ night_tasks|length }}
+                </span>
+            </div>
+
+            <div data-sortable-shift="night" class="space-y-3 min-h-[120px]">
+                {% for task in night_tasks %}
+                    {% include "partials/shift_task_card.html" with task=task %}
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 p-6 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                    </svg>
+                    <span class="text-xs ds-text-secondary">Arraste tarefas para o turno da noite.</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if done_tasks %}
+    <!-- Histórico Recente de Concluídas (Tactile Checkboxes + texto riscado) -->
+    <div class="ds-layer-raised ds-r-16 p-4">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono font-bold uppercase tracking-wider ds-text-secondary">
+                Concluídas Recentemente ({{ done_tasks|length }})
+            </span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {% for task in done_tasks %}
+            <div class="flex items-center justify-between gap-2 px-3 py-2 ds-layer-inset ds-r-12 min-w-0">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"status": "todo"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="ds-checkbox is-checked"
+                        title="Reabrir Tarefa"
+                    >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                    <span class="ds-badge ds-badge-neutral shrink-0">
+                        #{{ task.workspace.slug }}
+                    </span>
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="text-xs ds-text-secondary hover:ds-text-primary line-through truncate text-left min-w-0"
+                        title="{{ task.title }}"
+                    >
+                        {{ task.title }}
+                    </button>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"status": "todo"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="text-[10px] font-mono px-2 py-1 ds-btn-tactile ds-r-8"
+                        title="Reabrir Tarefa"
+                    >
+                        Reabrir
+                    </button>
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:delete_task' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="text-[10px] font-mono px-2 py-1 ds-btn-tactile ds-r-8 ds-urgent-text"
+                        title="Excluir"
+                    >
+                        &times;
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</section>

@@ -1,0 +1,8 @@
+from django.apps import AppConfig
+
+
+class TimetrackerConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.timetracker"
+    verbose_name = "Cronômetro de Tarefas (Time Tracker)"
+

@@ -1,0 +1,130 @@
+<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 w-full min-w-0">
+    <!-- Faixa 1: Bandeja Entalhada (.ds-layer-inset) com Pílulas de Filtro de Contexto (scroll horizontal suave + respiro py-2 px-1) -->
+    <div class="overflow-x-auto no-scrollbar flex items-center gap-2 py-2 px-2 ds-layer-inset ds-r-16 min-w-0 max-w-full">
+        <button
+            type="button"
+            id="ws-pill-all"
+            hx-get="{% url 'tasks:dashboard' %}?workspace=all&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 ds-r-12 text-xs font-medium transition {% if current_workspace_slug == 'all' and not current_project %}ds-btn-primary font-semibold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            <span>Todas as Frentes</span>
+            <kbd class="hidden sm:inline-flex text-[10px] font-mono px-1 rounded opacity-80">Alt+0</kbd>
+        </button>
+
+        {% for ws in workspaces %}
+        <button
+            type="button"
+            id="ws-pill-{{ forloop.counter }}"
+            data-ws-slug="{{ ws.slug }}"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ ws.slug }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 ds-r-12 text-xs font-medium transition {% if current_workspace_slug == ws.slug %}{% if ws.is_orange_accent %}ds-btn-urgent font-semibold{% else %}ds-btn-primary font-semibold{% endif %}{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            <span class="h-2 w-2 rounded-full shrink-0" style="background: {% if current_workspace_slug == ws.slug %}#ffffff{% elif ws.is_orange_accent %}var(--ds-accent-secondary){% else %}var(--ds-accent-primary){% endif %};"></span>
+            <span>{{ ws.name }}</span>
+            <span class="text-[10px] font-mono opacity-80">({{ ws.active_count }})</span>
+            {% if ws.shortcut_key %}
+            <kbd class="hidden sm:inline-flex text-[10px] font-mono px-1 rounded opacity-75">{{ ws.shortcut_key }}</kbd>
+            {% endif %}
+        </button>
+        {% endfor %}
+    </div>
+
+    <!-- Faixa 2: Alternador de Visão em Bandeja Entalhada (.ds-layer-inset) com Respiro para Sombras (py-2 px-2) -->
+    <div class="overflow-x-auto no-scrollbar flex items-center gap-2 py-2 px-2 ds-layer-inset ds-r-16 shrink-0 max-w-full">
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=focus"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'focus' or not view_mode %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            Modo Foco
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort|default:'arrival_desc' }}"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'list' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+            <span>Lista</span>
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'kanban' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            Kanban
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=analytics"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'analytics' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            Pulso &amp; Métricas
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=integrations"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'integrations' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            Integrações &amp; Logs
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=styleguide"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'styleguide' %}ds-layer-raised ds-urgent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            Style Guide (UI)
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'vault' %}ds-layer-raised ds-urgent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <span>Cofre &amp; Senhas</span>
+        </button>
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=settings"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 ds-r-12 text-xs font-mono transition {% if view_mode == 'settings' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+        >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+            </svg>
+            <span>Gestão &amp; Cadastros</span>
+        </button>
+    </div>
+</div>

@@ -1,0 +1,840 @@
+<!-- PHASE 5: TELA DE GESTÃO & CADASTROS DINÂMICOS (WORKSPACES, PROJETOS/LOJAS & RESPONSÁVEIS) -->
+<section class="space-y-6 pb-8">
+    <!-- Cabeçalho da Tela de Gestão & Cadastros -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div class="space-y-1.5 min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-1 ds-layer-inset ds-r-pill text-[11px] font-mono font-bold ds-accent-text uppercase tracking-wider">
+                    Command Center &bull; CRUD Dinâmico
+                </span>
+                <span class="px-2.5 py-1 ds-layer-inset ds-r-pill text-[11px] font-mono ds-urgent-text">
+                    Sincronização HTMX OOB em Tempo Real
+                </span>
+            </div>
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight ds-text-primary">
+                Gestão &amp; Cadastros (Frentes, Projetos/Lojas e Equipe)
+            </h1>
+            <p class="text-xs sm:text-sm ds-text-secondary max-w-3xl">
+                Cadastre, edite ou remova Frentes de Trabalho (<code class="font-mono ds-accent-text">#slug</code>),
+                Projetos/Clientes/Lojas do Launchpad e Responsáveis (<code class="font-mono ds-urgent-text">@handle</code>).
+                Todas as alterações atualizam instantaneamente a Sidebar, a Barra de Contexto e o <kbd class="font-mono">Ctrl+K</kbd>.
+            </p>
+        </div>
+
+        <!-- Resumo Rápido de Registros -->
+        <div class="grid grid-cols-3 gap-2.5 shrink-0">
+            <div class="ds-layer-inset ds-r-16 px-3.5 py-2.5 text-center">
+                <span class="block text-[10px] font-mono uppercase ds-text-secondary">Frentes</span>
+                <span class="text-base sm:text-lg font-bold font-mono ds-accent-text">{{ workspaces|length }}</span>
+            </div>
+            <div class="ds-layer-inset ds-r-16 px-3.5 py-2.5 text-center">
+                <span class="block text-[10px] font-mono uppercase ds-text-secondary">Projetos/Lojas</span>
+                <span class="text-base sm:text-lg font-bold font-mono ds-text-primary">{{ all_projects_manage|length }}</span>
+            </div>
+            <div class="ds-layer-inset ds-r-16 px-3.5 py-2.5 text-center">
+                <span class="block text-[10px] font-mono uppercase ds-text-secondary">Equipe (@)</span>
+                <span class="text-base sm:text-lg font-bold font-mono ds-urgent-text">{{ all_team_members|length }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid Principal de 3 Colunas (Empilhado em Mobile/Tablet, 3 Colunas em Ultrawide/XL) -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+
+        <!-- =================================================================== -->
+        <!-- SEÇÃO 1: GESTÃO DE FRENTES DE TRABALHO (WORKSPACES)                 -->
+        <!-- =================================================================== -->
+        <div class="ds-layer-raised ds-r-24 p-4 sm:p-5 space-y-5 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 shrink-0 ds-layer-inset ds-r-12 flex items-center justify-center ds-accent-text font-mono font-bold text-sm">
+                        #
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm sm:text-base font-bold ds-text-primary truncate">1. Frentes de Trabalho</h2>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">Workspaces &bull; Contextos e Atalhos</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-text-accent shrink-0">{{ workspaces|length }} ativas</span>
+            </div>
+
+            <!-- Formulário de Criação de Nova Frente (.ds-layer-inset) -->
+            <form
+                hx-post="{% url 'tasks:workspace_save' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                x-data="{ accent: '#3b82f6' }"
+                class="ds-layer-inset ds-r-16 p-3.5 sm:p-4 space-y-3"
+            >
+                <input type="hidden" name="view" value="settings" />
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                <input type="hidden" name="accent_color" :value="accent" />
+
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-mono font-bold uppercase tracking-wider ds-accent-text">
+                        + Nova Frente de Trabalho
+                    </span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Tag #slug</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Nome da Frente *</label>
+                        <input
+                            type="text"
+                            name="name"
+                            required
+                            placeholder="Ex: Consultoria IA"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Slug (#tag)</label>
+                        <input
+                            type="text"
+                            name="slug"
+                            placeholder="Ex: ia, imob"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Atalho de Teclado</label>
+                        <input
+                            type="text"
+                            name="shortcut_key"
+                            placeholder="Ex: Alt+6"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Cor de Destaque</label>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <button
+                                type="button"
+                                @click="accent = '#3b82f6'"
+                                :class="accent === '#3b82f6' ? 'ds-btn-primary font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-2.5 py-2 ds-r-12 text-[11px] font-mono flex items-center justify-center gap-1.5 transition"
+                            >
+                                <span class="w-2 h-2 rounded-full bg-[#3b82f6]"></span>
+                                <span>Azul</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="accent = '#f97316'"
+                                :class="accent === '#f97316' ? 'ds-btn-urgent font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-2.5 py-2 ds-r-12 text-[11px] font-mono flex items-center justify-center gap-1.5 transition"
+                            >
+                                <span class="w-2 h-2 rounded-full bg-[#f97316]"></span>
+                                <span>Laranja</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full ds-btn-primary py-2.5 px-4 ds-r-12 text-xs font-mono font-bold flex items-center justify-center gap-2"
+                >
+                    <span>+ Criar Frente de Trabalho</span>
+                </button>
+            </form>
+
+            <!-- Lista de Frentes Existentes -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[11px] font-mono uppercase tracking-wider ds-text-secondary">Frentes Cadastradas</span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Editar / Excluir</span>
+                </div>
+
+                {% for ws in workspaces %}
+                <div
+                    x-data="{ editing: false, confirmDelete: false, editAccent: '{{ ws.accent_color|default:'#3b82f6' }}' }"
+                    class="ds-layer-inset ds-r-16 p-3 space-y-2.5 transition"
+                >
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <span
+                                class="w-3 h-3 rounded-full shrink-0"
+                                style="background: {% if ws.is_orange_accent %}var(--ds-accent-secondary){% else %}var(--ds-accent-primary){% endif %};"
+                            ></span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-xs sm:text-sm font-bold ds-text-primary truncate">{{ ws.name }}</span>
+                                    <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[10px] font-mono {% if ws.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                        #{{ ws.slug }}
+                                    </span>
+                                    {% if ws.shortcut_key %}
+                                    <kbd class="text-[10px] font-mono px-1.5 py-0.5 ds-layer-raised ds-r-8 ds-text-secondary">{{ ws.shortcut_key }}</kbd>
+                                    {% endif %}
+                                </div>
+                                <p class="text-[11px] font-mono ds-text-secondary">
+                                    {{ ws.projects_count|default:0 }} projeto(s) &bull; {{ ws.tasks_count|default:0 }} tarefa(s) ({{ ws.active_count|default:0 }} ativas)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button
+                                type="button"
+                                @click="editing = !editing; confirmDelete = false"
+                                class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                                title="Editar Frente {{ ws.name }}"
+                            >
+                                Editar
+                            </button>
+                            <button
+                                type="button"
+                                @click="confirmDelete = !confirmDelete; editing = false"
+                                class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-urgent-text"
+                                title="Excluir Frente {{ ws.name }}"
+                            >
+                                Excluir
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Formulário Inline de Edição da Frente -->
+                    <form
+                        x-show="editing"
+                        x-cloak
+                        hx-post="{% url 'tasks:workspace_save' %}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="pt-2 border-t border-[#334155]/50 space-y-2.5"
+                    >
+                        <input type="hidden" name="view" value="settings" />
+                        <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                        <input type="hidden" name="workspace_id" value="{{ ws.id }}" />
+                        <input type="hidden" name="accent_color" :value="editAccent" />
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input
+                                type="text"
+                                name="name"
+                                value="{{ ws.name }}"
+                                required
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
+                                placeholder="Nome"
+                            />
+                            <input
+                                type="text"
+                                name="slug"
+                                value="{{ ws.slug }}"
+                                required
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="Slug"
+                            />
+                            <input
+                                type="text"
+                                name="shortcut_key"
+                                value="{{ ws.shortcut_key }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="Atalho (Alt+1)"
+                            />
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    @click="editAccent = '#3b82f6'"
+                                    :class="editAccent === '#3b82f6' ? 'ds-btn-primary' : 'ds-btn-tactile'"
+                                    class="px-2.5 py-1 ds-r-8 text-[10px] font-mono"
+                                >
+                                    Azul #3b82f6
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="editAccent = '#f97316'"
+                                    :class="editAccent === '#f97316' ? 'ds-btn-urgent' : 'ds-btn-tactile'"
+                                    class="px-2.5 py-1 ds-r-8 text-[10px] font-mono"
+                                >
+                                    Laranja #f97316
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" @click="editing = false" class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono">
+                                    Cancelar
+                                </button>
+                                <button type="submit" class="px-3 py-1 ds-btn-primary ds-r-8 text-[11px] font-mono font-bold">
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Confirmação de Exclusão Segura com Migração de Tarefas -->
+                    <form
+                        x-show="confirmDelete"
+                        x-cloak
+                        hx-post="{% url 'tasks:workspace_delete' ws.id %}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="pt-2 border-t border-[#334155]/50 space-y-2"
+                    >
+                        <input type="hidden" name="view" value="settings" />
+                        <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                        <p class="text-[11px] font-mono ds-urgent-text">
+                            Confirmar exclusão de <strong>#{{ ws.slug }}</strong>?
+                            {% if ws.tasks_count %}
+                            Selecione para onde migrar as {{ ws.tasks_count }} tarefa(s):
+                            {% endif %}
+                        </p>
+                        {% if ws.tasks_count and workspaces|length > 1 %}
+                        <select
+                            name="target_workspace_id"
+                            class="w-full ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                        >
+                            {% for target_ws in workspaces %}
+                                {% if target_ws.id != ws.id %}
+                                <option value="{{ target_ws.id }}">Migrar tarefas para #{{ target_ws.slug }} ({{ target_ws.name }})</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        <div class="flex items-center justify-end gap-2">
+                            <button type="button" @click="confirmDelete = false" class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="px-3 py-1 ds-btn-urgent ds-r-8 text-[11px] font-mono font-bold">
+                                Confirmar Exclusão
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- SEÇÃO 2: GESTÃO DE PROJETOS, CLIENTES & LOJAS (PROJECTS)            -->
+        <!-- =================================================================== -->
+        <div class="ds-layer-raised ds-r-24 p-4 sm:p-5 space-y-5 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 shrink-0 ds-layer-inset ds-r-12 flex items-center justify-center ds-urgent-text font-mono font-bold text-sm">
+                        &nearr;
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm sm:text-base font-bold ds-text-primary truncate">2. Projetos, Clientes &amp; Lojas</h2>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">Launchpad 1-Click &bull; GitHub Sync</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-text-urgent shrink-0">{{ all_projects_manage|length }} total</span>
+            </div>
+
+            <!-- Formulário de Criação de Novo Projeto / Loja (.ds-layer-inset) -->
+            <form
+                hx-post="{% url 'tasks:project_save' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="ds-layer-inset ds-r-16 p-3.5 sm:p-4 space-y-3"
+            >
+                <input type="hidden" name="view" value="settings" />
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-mono font-bold uppercase tracking-wider ds-urgent-text">
+                        + Novo Projeto / Cliente / Loja
+                    </span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Launchpad &amp; Repo</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Nome do Projeto / Loja *</label>
+                        <input
+                            type="text"
+                            name="name"
+                            required
+                            placeholder="Ex: Nova Loja Shopee"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Vincular à Frente *</label>
+                        <select
+                            name="workspace_id"
+                            required
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                        >
+                            {% for ws in workspaces %}
+                            <option value="{{ ws.id }}">#{{ ws.slug }} &mdash; {{ ws.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Cliente / Operação / Canal</label>
+                        <input
+                            type="text"
+                            name="client_or_store"
+                            placeholder="Ex: Mercado Livre Full / SaaS B2B"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">GitHub Repo (Webhook Auto-Map)</label>
+                        <input
+                            type="text"
+                            name="github_repo_name"
+                            placeholder="Ex: caio/meu-repo ou Sistema-de-Chamado"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">URL do Repositório (Git&nearr;)</label>
+                        <input
+                            type="url"
+                            name="repo_url"
+                            placeholder="https://github.com/..."
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">URL do Painel / Seller Centre (Painel&nearr;)</label>
+                        <input
+                            type="url"
+                            name="admin_or_panel_url"
+                            placeholder="https://seller.shopee.com.br/..."
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full ds-btn-primary py-2.5 px-4 ds-r-12 text-xs font-mono font-bold flex items-center justify-center gap-2"
+                >
+                    <span>+ Adicionar Projeto / Loja</span>
+                </button>
+            </form>
+
+            <!-- Lista de Projetos / Lojas Cadastrados -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[11px] font-mono uppercase tracking-wider ds-text-secondary">Projetos &amp; Operações</span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Status Launchpad</span>
+                </div>
+
+                {% for proj in all_projects_manage %}
+                <div
+                    x-data="{ editing: false }"
+                    class="ds-layer-inset ds-r-16 p-3 space-y-2.5 transition {% if not proj.is_active %}opacity-60{% endif %}"
+                >
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0 space-y-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                    class="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style="background: {% if proj.workspace.is_orange_accent %}var(--ds-accent-secondary){% else %}var(--ds-accent-primary){% endif %};"
+                                ></span>
+                                <span class="text-xs sm:text-sm font-bold ds-text-primary truncate">{{ proj.name }}</span>
+                                <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[10px] font-mono {% if proj.workspace.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                    #{{ proj.workspace.slug }}
+                                </span>
+                                {% if not proj.is_active %}
+                                <span class="px-1.5 py-0.5 ds-layer-raised ds-r-8 text-[10px] font-mono ds-text-secondary">Arquivado</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-[11px] font-mono ds-text-secondary truncate">
+                                {{ proj.client_or_store|default:"Operação Direta" }} &bull; {{ proj.active_tasks_count|default:0 }} ativas ({{ proj.tasks_count|default:0 }} total)
+                            </p>
+                            {% if proj.github_repo_name or proj.repo_url or proj.admin_or_panel_url %}
+                            <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                {% if proj.github_repo_name %}
+                                <span class="px-1.5 py-0.5 ds-layer-raised ds-r-8 text-[10px] font-mono ds-text-secondary">
+                                    gh: {{ proj.github_repo_name }}
+                                </span>
+                                {% endif %}
+                                {% if proj.repo_url %}
+                                <a href="{{ proj.repo_url }}" target="_blank" rel="noopener" class="px-1.5 py-0.5 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-accent-text">
+                                    Git&nearr;
+                                </a>
+                                {% endif %}
+                                {% if proj.admin_or_panel_url %}
+                                <a href="{{ proj.admin_or_panel_url }}" target="_blank" rel="noopener" class="px-1.5 py-0.5 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text">
+                                    Painel&nearr;
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <!-- Switch Tátil Ativo / Arquivado -->
+                            <button
+                                type="button"
+                                hx-post="{% url 'tasks:project_toggle' proj.id %}"
+                                hx-vals='{"view": "settings", "workspace": "{{ current_workspace_slug }}"}'
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="ds-switch {% if proj.is_active %}is-on{% endif %}"
+                                title="{% if proj.is_active %}Ativo no Launchpad (Clique para Arquivar){% else %}Arquivado (Clique para Ativar){% endif %}"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click="editing = !editing"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                                title="Editar Projeto {{ proj.name }}"
+                            >
+                                Editar
+                            </button>
+
+                            <button
+                                type="button"
+                                hx-post="{% url 'tasks:project_delete' proj.id %}"
+                                hx-vals='{"view": "settings", "workspace": "{{ current_workspace_slug }}"}'
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-urgent-text"
+                                title="Excluir Projeto {{ proj.name }}"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Formulário Inline de Edição do Projeto -->
+                    <form
+                        x-show="editing"
+                        x-cloak
+                        hx-post="{% url 'tasks:project_save' %}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="pt-2 border-t border-[#334155]/50 space-y-2"
+                    >
+                        <input type="hidden" name="view" value="settings" />
+                        <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                        <input type="hidden" name="project_id" value="{{ proj.id }}" />
+                        <input type="hidden" name="is_active" value="{% if proj.is_active %}1{% else %}0{% endif %}" />
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                                type="text"
+                                name="name"
+                                value="{{ proj.name }}"
+                                required
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
+                                placeholder="Nome do Projeto/Loja"
+                            />
+                            <select
+                                name="workspace_id"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                            >
+                                {% for ws in workspaces %}
+                                <option value="{{ ws.id }}" {% if ws.id == proj.workspace_id %}selected{% endif %}>#{{ ws.slug }} &mdash; {{ ws.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                                type="text"
+                                name="client_or_store"
+                                value="{{ proj.client_or_store }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
+                                placeholder="Cliente / Loja"
+                            />
+                            <input
+                                type="text"
+                                name="github_repo_name"
+                                value="{{ proj.github_repo_name }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="GitHub Repo Name"
+                            />
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                                type="url"
+                                name="repo_url"
+                                value="{{ proj.repo_url }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="URL Git"
+                            />
+                            <input
+                                type="url"
+                                name="admin_or_panel_url"
+                                value="{{ proj.admin_or_panel_url }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="URL Painel/Admin"
+                            />
+                        </div>
+
+                        <div class="flex items-center justify-end gap-1.5">
+                            <button type="button" @click="editing = false" class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="px-3 py-1 ds-btn-primary ds-r-8 text-[11px] font-mono font-bold">
+                                Salvar Projeto
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- SEÇÃO 3: GESTÃO DE RESPONSÁVEIS / EQUIPE (TEAM MEMBERS)             -->
+        <!-- =================================================================== -->
+        <div class="ds-layer-raised ds-r-24 p-4 sm:p-5 space-y-5 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 shrink-0 ds-layer-inset ds-r-12 flex items-center justify-center ds-accent-text font-mono font-bold text-sm">
+                        @
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm sm:text-base font-bold ds-text-primary truncate">3. Responsáveis (Equipe)</h2>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">Atribuição em 1 Clique &bull; @handles</p>
+                    </div>
+                </div>
+                <span class="ds-badge ds-text-accent shrink-0">{{ team_members|length }} ativos</span>
+            </div>
+
+            <!-- Formulário de Cadastro de Novo Responsável (.ds-layer-inset) -->
+            <form
+                hx-post="{% url 'tasks:member_save' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                x-data="{ memberAccent: '#3b82f6' }"
+                class="ds-layer-inset ds-r-16 p-3.5 sm:p-4 space-y-3"
+            >
+                <input type="hidden" name="view" value="settings" />
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                <input type="hidden" name="accent_color" :value="memberAccent" />
+
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-mono font-bold uppercase tracking-wider ds-accent-text">
+                        + Cadastrar Responsável
+                    </span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Tag @handle</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Nome Completo *</label>
+                        <input
+                            type="text"
+                            name="name"
+                            required
+                            placeholder="Ex: Lucas Silva"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Handle (@identificador) *</label>
+                        <input
+                            type="text"
+                            name="handle"
+                            required
+                            placeholder="Ex: lucas"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Papel / Especialidade</label>
+                        <input
+                            type="text"
+                            name="role"
+                            placeholder="Ex: Dev Frontend / Ops"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Cor do Avatar</label>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <button
+                                type="button"
+                                @click="memberAccent = '#3b82f6'"
+                                :class="memberAccent === '#3b82f6' ? 'ds-btn-primary font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-2.5 py-2 ds-r-12 text-[11px] font-mono flex items-center justify-center gap-1.5 transition"
+                            >
+                                <span class="w-2 h-2 rounded-full bg-[#3b82f6]"></span>
+                                <span>Azul</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="memberAccent = '#f97316'"
+                                :class="memberAccent === '#f97316' ? 'ds-btn-urgent font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-2.5 py-2 ds-r-12 text-[11px] font-mono flex items-center justify-center gap-1.5 transition"
+                            >
+                                <span class="w-2 h-2 rounded-full bg-[#f97316]"></span>
+                                <span>Laranja</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full ds-btn-primary py-2.5 px-4 ds-r-12 text-xs font-mono font-bold flex items-center justify-center gap-2"
+                >
+                    <span>+ Cadastrar Responsável</span>
+                </button>
+            </form>
+
+            <!-- Lista de Responsáveis Cadastrados -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[11px] font-mono uppercase tracking-wider ds-text-secondary">Membros &amp; Parceiros</span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Tarefas Ativas</span>
+                </div>
+
+                {% for member in all_team_members %}
+                <div
+                    x-data="{ editing: false, editColor: '{{ member.accent_color|default:'#3b82f6' }}' }"
+                    class="ds-layer-inset ds-r-16 p-3 space-y-2.5 transition {% if not member.is_active %}opacity-60{% endif %}"
+                >
+                    <div class="flex items-center justify-between gap-2.5">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <!-- Avatar Tátil Circular (.ds-layer-raised ds-r-pill) -->
+                            <div
+                                class="w-9 h-9 shrink-0 ds-layer-raised ds-r-pill flex items-center justify-center font-mono text-xs font-bold {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}"
+                            >
+                                {{ member.avatar_initials }}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-xs sm:text-sm font-bold ds-text-primary truncate">{{ member.name }}</span>
+                                    <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[10px] font-mono {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                        @{{ member.handle }}
+                                    </span>
+                                </div>
+                                <p class="text-[11px] font-mono ds-text-secondary truncate">
+                                    {{ member.role|default:"Membro da Equipe" }} &bull;
+                                    <strong class="ds-text-primary">{{ member.active_tasks_count|default:0 }}</strong> ativas
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <!-- Switch Tátil Ativo / Inativo -->
+                            <button
+                                type="button"
+                                hx-post="{% url 'tasks:member_toggle' member.id %}"
+                                hx-vals='{"view": "settings", "workspace": "{{ current_workspace_slug }}"}'
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="ds-switch {% if member.is_active %}is-on{% endif %}"
+                                title="{% if member.is_active %}Ativo nos Seletores 1-Click (Clique para Desativar){% else %}Inativo (Clique para Ativar){% endif %}"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click="editing = !editing"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                                title="Editar @{{ member.handle }}"
+                            >
+                                Editar
+                            </button>
+
+                            <button
+                                type="button"
+                                hx-post="{% url 'tasks:member_delete' member.id %}"
+                                hx-vals='{"view": "settings", "workspace": "{{ current_workspace_slug }}"}'
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-urgent-text"
+                                title="Excluir @{{ member.handle }} e desvincular suas tarefas"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Formulário Inline de Edição do Responsável -->
+                    <form
+                        x-show="editing"
+                        x-cloak
+                        hx-post="{% url 'tasks:member_save' %}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="pt-2 border-t border-[#334155]/50 space-y-2"
+                    >
+                        <input type="hidden" name="view" value="settings" />
+                        <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                        <input type="hidden" name="member_id" value="{{ member.id }}" />
+                        <input type="hidden" name="is_active" value="{% if member.is_active %}1{% else %}0{% endif %}" />
+                        <input type="hidden" name="accent_color" :value="editColor" />
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input
+                                type="text"
+                                name="name"
+                                value="{{ member.name }}"
+                                required
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
+                                placeholder="Nome"
+                            />
+                            <input
+                                type="text"
+                                name="handle"
+                                value="{{ member.handle }}"
+                                required
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="Handle"
+                            />
+                            <input
+                                type="text"
+                                name="role"
+                                value="{{ member.role }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
+                                placeholder="Cargo/Papel"
+                            />
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    @click="editColor = '#3b82f6'"
+                                    :class="editColor === '#3b82f6' ? 'ds-btn-primary' : 'ds-btn-tactile'"
+                                    class="px-2.5 py-1 ds-r-8 text-[10px] font-mono"
+                                >
+                                    Azul
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="editColor = '#f97316'"
+                                    :class="editColor === '#f97316' ? 'ds-btn-urgent' : 'ds-btn-tactile'"
+                                    class="px-2.5 py-1 ds-r-8 text-[10px] font-mono"
+                                >
+                                    Laranja
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" @click="editing = false" class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono">
+                                    Cancelar
+                                </button>
+                                <button type="submit" class="px-3 py-1 ds-btn-primary ds-r-8 text-[11px] font-mono font-bold">
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</section>
+

@@ -1,0 +1,300 @@
+<section id="kanban-board-section" class="space-y-4">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-7 h-7 ds-layer-raised ds-r-8 ds-accent-text shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary">
+                    Quadro Kanban Interativo (Drag &amp; Drop)
+                </h2>
+                <p class="text-[11px] font-mono ds-text-secondary">
+                    Arraste os cards entre as cavidades para atualizar o status instantaneamente
+                </p>
+            </div>
+        </div>
+
+        <!-- 4-Step Process Indicator Responsivo (grid-cols-2 no mobile, flex no sm+) -->
+        <div class="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-2.5 sm:gap-3 px-3.5 py-2.5 ds-layer-inset ds-r-16 text-xs font-mono">
+            <div class="inline-flex items-center gap-1.5 ds-urgent-text font-semibold min-w-0">
+                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center ds-btn-urgent text-[11px] font-bold shrink-0">1</span>
+                <span class="truncate">1. Inbox ({{ inbox_tasks|length }})</span>
+            </div>
+            <div class="hidden sm:block w-4 h-0.5 rounded shrink-0" style="background: var(--ds-accent-primary);"></div>
+            <div class="inline-flex items-center gap-1.5 ds-accent-text font-semibold min-w-0">
+                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center ds-btn-primary text-[11px] font-bold shrink-0">2</span>
+                <span class="truncate">2. Fila ({{ kanban_todo|length }})</span>
+            </div>
+            <div class="hidden sm:block w-4 h-0.5 rounded shrink-0" style="background: var(--ds-accent-primary);"></div>
+            <div class="inline-flex items-center gap-1.5 ds-accent-text font-semibold min-w-0">
+                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center ds-btn-primary text-[11px] font-bold shrink-0">3</span>
+                <span class="truncate">3. Execução ({{ kanban_doing|length }})</span>
+            </div>
+            <div class="hidden sm:block w-4 h-0.5 rounded shrink-0" style="background: var(--ds-border-subtle);"></div>
+            <div class="inline-flex items-center gap-1.5 ds-text-secondary min-w-0">
+                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center ds-layer-raised text-[11px] font-bold shrink-0">4</span>
+                <span class="truncate">4. Concluído ({{ done_tasks|length }})</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+        <!-- Coluna 1: INBOX -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2 mb-3 ds-layer-raised ds-r-12">
+                <span class="text-xs font-bold uppercase tracking-wider ds-urgent-text">1. Inbox (Triagem)</span>
+                <span class="ds-badge ds-badge-urgent">{{ inbox_tasks|length }}</span>
+            </div>
+            <div data-sortable-kanban="inbox" class="space-y-3 min-h-[150px]">
+                {% for task in inbox_tasks %}
+                <div data-task-id="{{ task.id }}" class="cursor-grab active:cursor-grabbing ds-layer-raised ds-r-16 p-3.5 min-w-0">
+                    <div class="flex items-center justify-between text-[10px] font-mono mb-2">
+                        <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">#{{ task.workspace.slug }}</span>
+                        <span class="ds-badge ds-badge-neutral">P:{{ task.priority_score }}</span>
+                    </div>
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="text-left w-full min-w-0"
+                    >
+                        <p class="text-xs font-medium ds-text-primary hover:ds-accent-text break-words line-clamp-2">{{ task.title }}</p>
+                    </button>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t" style="border-color: var(--ds-border-subtle);">
+                        <div class="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                                hx-target="#task-drawer-container"
+                                hx-swap="innerHTML"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            >
+                                Detalhes
+                            </button>
+                            {% include "partials/assignee_chip_popover.html" %}
+                        </div>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+                            hx-vals='{"status": "todo"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-primary ds-r-8 text-[10px] font-mono"
+                        >
+                            &rarr; A Fazer
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 py-8 px-4 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                    <p class="text-xs ds-text-secondary">Arraste para Inbox</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Coluna 2: A FAZER (TODO) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2 mb-3 ds-layer-raised ds-r-12">
+                <span class="text-xs font-bold uppercase tracking-wider ds-text-primary">2. A Fazer (Fila)</span>
+                <span class="ds-badge ds-badge-primary">{{ kanban_todo|length }}</span>
+            </div>
+            <div data-sortable-kanban="todo" class="space-y-3 min-h-[150px]">
+                {% for task in kanban_todo %}
+                <div
+                    data-task-id="{{ task.id }}"
+                    class="cursor-grab active:cursor-grabbing ds-layer-raised ds-r-16 {% if task.is_top_three %}ds-top3-card{% endif %} p-3.5 min-w-0"
+                >
+                    <div class="flex items-center justify-between text-[10px] font-mono mb-2">
+                        <div class="flex items-center gap-1 min-w-0">
+                            {% if task.is_top_three %}<span class="ds-badge ds-badge-urgent shrink-0">★ TOP 3</span>{% endif %}
+                            <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">#{{ task.workspace.slug }}</span>
+                        </div>
+                        <span class="ds-badge ds-badge-neutral">P:{{ task.priority_score }}</span>
+                    </div>
+                    <div class="flex items-start gap-2 min-w-0">
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+                            hx-vals='{"status": "done"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="ds-checkbox mt-0.5"
+                            title="Concluir"
+                        ></button>
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="text-left flex-1 min-w-0"
+                        >
+                            <p class="text-xs font-medium ds-text-primary hover:ds-accent-text break-words line-clamp-2">{{ task.title }}</p>
+                        </button>
+                    </div>
+                    {% if task.subtasks_total > 0 %}
+                    <div class="mt-2.5 space-y-1">
+                        <div class="flex justify-between text-[10px] font-mono ds-text-secondary">
+                            <span>Checklist</span>
+                            <span>{{ task.subtasks_done }}/{{ task.subtasks_total }}</span>
+                        </div>
+                        <div class="ds-progress-track">
+                            <div class="ds-progress-fill" style="width: {{ task.subtasks_progress_pct }}%;"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t" style="border-color: var(--ds-border-subtle);">
+                        <div class="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                hx-post="{% url 'timetracker:start' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="px-2.5 py-1 ds-btn-primary ds-r-8 text-[10px] font-mono"
+                            >
+                                &#9654; Play
+                            </button>
+                            {% include "partials/assignee_chip_popover.html" %}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button
+                                type="button"
+                                hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                                hx-target="#task-drawer-container"
+                                hx-swap="innerHTML"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            >
+                                Detalhes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 py-8 px-4 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    <p class="text-xs ds-text-secondary">Arraste para A Fazer</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Coluna 3: EM EXECUÇÃO (DOING) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2 mb-3 ds-layer-raised ds-r-12">
+                <span class="text-xs font-bold uppercase tracking-wider ds-accent-text">3. Em Execução</span>
+                <span class="ds-badge ds-badge-primary">{{ kanban_doing|length }}</span>
+            </div>
+            <div data-sortable-kanban="doing" class="space-y-3 min-h-[150px]">
+                {% for task in kanban_doing %}
+                <div data-task-id="{{ task.id }}" class="cursor-grab active:cursor-grabbing ds-layer-raised ds-r-16 p-3.5 min-w-0" style="border-color: var(--ds-accent-primary);">
+                    <div class="flex items-center justify-between text-[10px] font-mono mb-2">
+                        <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">#{{ task.workspace.slug }}</span>
+                        <span class="ds-badge ds-badge-urgent">P:{{ task.priority_score }}</span>
+                    </div>
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="text-left w-full min-w-0"
+                    >
+                        <p class="text-xs font-medium ds-text-primary hover:ds-accent-text break-words line-clamp-2">{{ task.title }}</p>
+                    </button>
+                    {% if task.subtasks_total > 0 %}
+                    <div class="mt-2.5 space-y-1">
+                        <div class="flex justify-between text-[10px] font-mono ds-text-secondary">
+                            <span>Checklist</span>
+                            <span>{{ task.subtasks_done }}/{{ task.subtasks_total }}</span>
+                        </div>
+                        <div class="ds-progress-track">
+                            <div class="ds-progress-fill" style="width: {{ task.subtasks_progress_pct }}%;"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t" style="border-color: var(--ds-border-subtle);">
+                        <div class="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=kanban"
+                                hx-target="#task-drawer-container"
+                                hx-swap="innerHTML"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            >
+                                Detalhes
+                            </button>
+                            {% include "partials/assignee_chip_popover.html" %}
+                        </div>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+                            hx-vals='{"status": "done"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-primary ds-r-8 text-[10px] font-mono"
+                        >
+                            &#10003; Concluir
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 py-8 px-4 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <p class="text-xs ds-text-secondary">Arraste para Em Execução</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Coluna 4: CONCLUÍDAS (DONE - Tactile Checkbox Checked + texto riscado) -->
+        <div class="flex flex-col ds-layer-inset ds-r-16 p-3.5 min-w-0">
+            <div class="flex items-center justify-between px-3 py-2 mb-3 ds-layer-raised ds-r-12">
+                <span class="text-xs font-bold uppercase tracking-wider ds-text-secondary">4. Concluídas</span>
+                <span class="ds-badge ds-badge-neutral">{{ done_tasks|length }}</span>
+            </div>
+            <div data-sortable-kanban="done" class="space-y-3 min-h-[150px]">
+                {% for task in done_tasks %}
+                <div data-task-id="{{ task.id }}" class="cursor-grab active:cursor-grabbing ds-layer-raised ds-r-16 p-3.5 min-w-0 opacity-85">
+                    <div class="flex items-center justify-between text-[10px] font-mono ds-text-secondary mb-2">
+                        <span class="ds-badge ds-badge-neutral">#{{ task.workspace.slug }}</span>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=kanban"
+                            hx-vals='{"status": "todo"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2 py-0.5 ds-btn-tactile ds-r-8 text-[10px]"
+                        >
+                            Reabrir
+                        </button>
+                    </div>
+                    <div class="flex items-start gap-2 min-w-0">
+                        <span class="ds-checkbox is-checked mt-0.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </span>
+                        <p class="text-xs ds-text-secondary line-through break-words line-clamp-2 min-w-0">{{ task.title }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-12 py-8 px-4 text-center">
+                    <svg class="w-6 h-6 ds-text-secondary mb-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <p class="text-xs ds-text-secondary">Arraste para Concluir</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,262 @@
+<section id="analytics-view-section" class="space-y-6">
+    <!-- Cabeçalho Pulso & Analytics -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-7 h-7 ds-layer-raised ds-r-8 ds-accent-text shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+            </span>
+            <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary">
+                Pulso &amp; Analytics &mdash; Relatório de Horas e Produtividade
+            </h2>
+        </div>
+        <span class="text-xs font-mono px-3 py-1 ds-layer-inset ds-r-12 ds-text-secondary">
+            Tempo Total Acumulado: <strong class="ds-accent-text">{{ total_logged_all_formatted }}</strong>
+        </span>
+    </div>
+
+    <!-- KPI Cards Táteis (.ds-layer-raised .ds-r-16): grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-1.5 min-w-0">
+            <span class="text-[11px] font-mono uppercase ds-text-secondary">Foco Acumulado (Geral)</span>
+            <div class="text-2xl font-mono font-bold ds-accent-text">{{ total_logged_all_formatted }}</div>
+            <p class="text-[11px] ds-text-secondary">Hoje: <strong class="ds-text-primary">{{ total_focus_formatted }}</strong></p>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-2 min-w-0">
+            <span class="text-[11px] font-mono uppercase ds-text-secondary">Taxa de Conclusão</span>
+            <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-mono font-bold ds-text-primary">{{ completion_rate_pct }}%</span>
+                <span class="text-xs font-mono ds-text-secondary">({{ total_done_count }}/{{ total_tasks_count }})</span>
+            </div>
+            <div class="ds-progress-track">
+                <div class="ds-progress-fill" style="width: {{ completion_rate_pct }}%;"></div>
+            </div>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-1.5 min-w-0">
+            <span class="text-[11px] font-mono uppercase ds-text-secondary">Entregas (Dia / Semana)</span>
+            <div class="text-2xl font-mono font-bold ds-text-primary">
+                {{ done_today_count }} <span class="text-sm font-normal ds-text-secondary">hoje</span> &bull; {{ done_week_count }} <span class="text-sm font-normal ds-text-secondary">7d</span>
+            </div>
+            <p class="text-[11px] ds-text-secondary">Abertas atualmente: <strong class="ds-text-primary">{{ total_active_count }}</strong></p>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 ds-top3-card p-4 space-y-1.5 min-w-0">
+            <span class="text-[11px] font-mono uppercase ds-urgent-text">Slots Top 3 do Dia</span>
+            <div class="text-2xl font-mono font-bold ds-urgent-text">{{ top_three_tasks|length }}/3 Ativos</div>
+            <p class="text-[11px] ds-text-secondary">Prioridades máximas em execução</p>
+        </div>
+    </div>
+
+    <!-- Barras Proporcionais Táteis: Horas por Workspace e Horas por Projeto -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Card 1: Horas Totais por Workspace -->
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-4 min-w-0">
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Horas Registradas por Frente (Workspace)
+                </h3>
+                <span class="text-[11px] font-mono ds-text-secondary shrink-0">Proporção de Esforço</span>
+            </div>
+
+            <div class="space-y-4">
+                {% for item in analytics_by_workspace %}
+                <div class="space-y-1.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: {% if item.workspace.is_orange_accent %}var(--ds-accent-secondary){% else %}var(--ds-accent-primary){% endif %};"></span>
+                            <span class="font-medium ds-text-primary truncate">{{ item.workspace.name }}</span>
+                            <span class="ds-badge ds-badge-neutral shrink-0">#{{ item.workspace.slug }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 font-mono text-xs shrink-0">
+                            <span class="ds-text-secondary text-[11px]">{{ item.tasks_done }}/{{ item.tasks_total }} concluídas</span>
+                            <strong class="{% if item.workspace.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                {{ item.formatted_time }}
+                            </strong>
+                        </div>
+                    </div>
+                    <div class="ds-progress-track">
+                        <div
+                            class="ds-progress-fill {% if item.workspace.is_orange_accent %}ds-progress-fill-urgent{% endif %}"
+                            style="width: {{ item.bar_pct }}%;"
+                        ></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Card 2: Horas Totais por Projeto / Loja -->
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-4 min-w-0">
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Horas Registradas por Projeto / Operação
+                </h3>
+                <span class="text-[11px] font-mono ds-text-secondary shrink-0">Alocação Real</span>
+            </div>
+
+            <div class="space-y-4">
+                {% for item in analytics_by_project %}
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between gap-2 text-xs">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="ds-badge {% if item.project.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %} shrink-0">
+                                #{{ item.project.workspace.slug }}
+                            </span>
+                            <span class="font-medium ds-text-primary truncate">{{ item.project.name }}</span>
+                        </div>
+                        <strong class="font-mono shrink-0 {% if item.project.workspace.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                            {{ item.formatted_time }}
+                        </strong>
+                    </div>
+                    <div class="ds-progress-track">
+                        <div
+                            class="ds-progress-fill {% if item.project.workspace.is_orange_accent %}ds-progress-fill-urgent{% endif %}"
+                            style="width: {{ item.bar_pct }}%;"
+                        ></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-xs ds-text-secondary text-center py-6">Nenhum projeto neste filtro.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Adição Rápida de Tempo Manual e Histórico de Sessões (TimeLogs com Compact Table Header Responsivo) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Lançamento Manual de Tempo (+15m, +30m, +1h) -->
+        <div class="lg:col-span-5 ds-layer-raised ds-r-16 p-4 space-y-3 min-w-0">
+            <div class="border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Lançar Tempo Manual Rápido
+                </h3>
+                <p class="text-[11px] ds-text-secondary">
+                    Esqueceu de acionar o Play? Adicione blocos de foco diretamente:
+                </p>
+            </div>
+
+            <div class="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+                {% for task in all_active_tasks %}
+                <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 p-2.5 ds-layer-inset ds-r-12 min-w-0">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-mono {% if task.workspace.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                #{{ task.workspace.slug }}
+                            </span>
+                            <span class="text-[10px] font-mono ds-text-secondary">
+                                ({{ task.total_logged_minutes }}m)
+                            </span>
+                        </div>
+                        <p class="text-xs ds-text-primary truncate" title="{{ task.title }}">{{ task.title }}</p>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:add_manual' task.id %}?workspace={{ current_workspace_slug }}&view=analytics"
+                            hx-vals='{"minutes": "15"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                        >+15m</button>
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:add_manual' task.id %}?workspace={{ current_workspace_slug }}&view=analytics"
+                            hx-vals='{"minutes": "30"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                        >+30m</button>
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:add_manual' task.id %}?workspace={{ current_workspace_slug }}&view=analytics"
+                            hx-vals='{"minutes": "60"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                        >+1h</button>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-xs ds-text-secondary text-center py-6">Nenhuma tarefa ativa.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Histórico Recente de Sessões (TimeLogs) com overflow-x-auto e min-w-[600px] -->
+        <div class="lg:col-span-7 ds-layer-raised ds-r-16 p-4 space-y-3 min-w-0">
+            <div class="flex items-center justify-between gap-2 pb-1">
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                        Histórico Recente de Sessões (TimeLog)
+                    </h3>
+                    <p class="text-[11px] ds-text-secondary">
+                        Auditoria de sessões cronometradas e lançamentos manuais
+                    </p>
+                </div>
+                <span class="ds-badge ds-badge-primary shrink-0">{{ recent_timelogs|length }} registros</span>
+            </div>
+
+            <!-- Wrapper Responsivo com overflow-x-auto e min-w-[600px] para Preservar o Compact Table Header -->
+            <div class="overflow-x-auto w-full pb-1">
+                <div class="min-w-[600px] space-y-2">
+                    <!-- Compact Table Header (.ds-layer-raised .ds-r-12) -->
+                    <div class="grid grid-cols-12 gap-2 px-3 py-2 ds-layer-raised ds-r-12 text-[10px] font-mono font-bold uppercase tracking-wider ds-text-secondary">
+                        <div class="col-span-3">Frente / Data</div>
+                        <div class="col-span-6">Tarefa</div>
+                        <div class="col-span-3 text-right">Duração / Ação</div>
+                    </div>
+
+                    <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {% for log in recent_timelogs %}
+                        <div class="grid grid-cols-12 items-center gap-2 px-3 py-2 ds-layer-inset ds-r-12 min-w-0">
+                            <div class="col-span-3 min-w-0">
+                                <span class="block text-[10px] font-mono font-bold {% if log.task.workspace.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                    #{{ log.task.workspace.slug }}
+                                </span>
+                                <span class="block text-[10px] font-mono ds-text-secondary truncate">
+                                    {{ log.start_time|date:"d/m H:i" }}
+                                </span>
+                            </div>
+
+                            <div class="col-span-6 min-w-0">
+                                <p class="text-xs font-medium ds-text-primary truncate">{{ log.task.title }}</p>
+                                {% if log.task.project %}
+                                <span class="text-[10px] ds-text-secondary truncate block">{{ log.task.project.name }}</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-span-3 flex items-center justify-end gap-1.5 shrink-0">
+                                {% if log.is_running %}
+                                <span class="ds-badge ds-badge-primary">
+                                    RODANDO
+                                </span>
+                                {% else %}
+                                <span class="ds-badge ds-badge-neutral ds-text-primary">
+                                    {{ log.duration_minutes }} min
+                                </span>
+                                {% endif %}
+
+                                <button
+                                    type="button"
+                                    hx-post="{% url 'timetracker:delete_log' log.id %}?workspace={{ current_workspace_slug }}&view=analytics"
+                                    hx-target="#dashboard-content"
+                                    hx-swap="innerHTML"
+                                    class="px-2 py-0.5 ds-btn-tactile ds-r-8 text-xs font-mono ds-urgent-text"
+                                    title="Deletar registro incorreto"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <p class="text-xs ds-text-secondary text-center py-6">Nenhum registro de tempo encontrado.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

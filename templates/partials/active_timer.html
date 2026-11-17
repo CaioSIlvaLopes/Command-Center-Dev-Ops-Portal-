@@ -1,0 +1,91 @@
+{% if active_timelog %}
+<div
+    x-data="{
+        seconds: {{ active_timelog.elapsed_seconds|default:0 }},
+        timerId: null,
+        init() {
+            this.timerId = setInterval(() => { this.seconds++; }, 1000);
+        },
+        destroy() {
+            if (this.timerId) clearInterval(this.timerId);
+        },
+        get formattedTime() {
+            const hrs = String(Math.floor(this.seconds / 3600)).padStart(2, '0');
+            const mins = String(Math.floor((this.seconds % 3600) / 60)).padStart(2, '0');
+            const secs = String(this.seconds % 60).padStart(2, '0');
+            return `${hrs}:${mins}:${secs}`;
+        }
+    }"
+    class="flex items-center justify-between gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 ds-layer-raised ds-r-16 min-w-0"
+    style="border-color: var(--ds-accent-primary);"
+>
+    <div class="hidden sm:flex items-center gap-2 min-w-0 flex-1">
+        <span class="relative flex h-2.5 w-2.5 shrink-0">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style="background: var(--ds-accent-primary);"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5" style="background: var(--ds-accent-primary);"></span>
+        </span>
+        <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+                <span class="ds-badge ds-badge-primary">
+                    #{{ active_timelog.task.workspace.slug }}
+                </span>
+                {% if active_timelog.task.project %}
+                <span class="text-[11px] ds-text-secondary truncate">
+                    {{ active_timelog.task.project.name }}
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-xs font-medium ds-text-primary truncate" title="{{ active_timelog.task.title }}">
+                {{ active_timelog.task.title }}
+            </p>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Visor Entalhado (.ds-layer-inset) do Cronômetro -->
+        <div class="px-2 py-1 ds-layer-inset ds-r-8 font-mono text-xs sm:text-sm font-bold ds-accent-text tracking-wider whitespace-nowrap" x-text="formattedTime">
+            00:00:00
+        </div>
+
+        <button
+            type="button"
+            hx-post="{% url 'timetracker:stop' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            class="inline-flex items-center gap-1 px-2 py-1.5 ds-btn-tactile ds-r-8 text-xs font-medium whitespace-nowrap"
+            title="Pausar Cronômetro"
+        >
+            <svg class="w-4 h-4 ds-urgent-text" fill="currentColor" viewBox="0 0 20 20">
+                <rect x="4" y="4" width="12" height="12" rx="1.5"></rect>
+            </svg>
+            <span class="hidden md:inline">Parar</span>
+        </button>
+
+        <button
+            type="button"
+            hx-post="{% url 'tasks:update_status' active_timelog.task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+            hx-vals='{"status": "done"}'
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            class="inline-flex items-center gap-1 px-2 py-1.5 ds-btn-primary ds-r-8 text-xs font-medium whitespace-nowrap"
+            title="Concluir Tarefa e Parar Timer"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </button>
+    </div>
+</div>
+{% else %}
+<div class="flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 ds-layer-raised ds-r-16 min-w-0">
+    <div class="hidden sm:flex items-center gap-2 min-w-0">
+        <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: var(--ds-text-secondary);"></span>
+        <span class="text-xs font-mono ds-text-secondary truncate">
+            TIMER INATIVO &mdash; Clique em <span class="ds-accent-text font-semibold">Play</span>
+        </span>
+    </div>
+    <span class="text-[11px] font-mono px-2.5 py-1 ds-layer-inset ds-r-8 ds-text-secondary whitespace-nowrap shrink-0">
+        Hoje: <strong class="ds-text-primary">{{ total_focus_formatted|default:"0m" }}</strong>
+    </span>
+</div>
+{% endif %}

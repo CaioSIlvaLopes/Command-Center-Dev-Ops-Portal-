@@ -1,0 +1,255 @@
+<section id="inbox-section" class="ds-layer-raised ds-r-16 p-3.5 sm:p-4 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b" style="border-color: var(--ds-border-subtle);">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <span class="inline-flex items-center justify-center w-7 h-7 shrink-0 ds-layer-inset ds-r-8 ds-urgent-text">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary flex flex-wrap items-center gap-2">
+                    <span>Inbox &amp; Triagem de Webhooks</span>
+                    <span class="ds-badge {% if inbox_tasks %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                        {{ inbox_tasks|length }} NA FILA
+                    </span>
+                </h2>
+                <p class="text-[11px] ds-text-secondary truncate">
+                    Recepção em tempo real via <code class="font-mono ds-accent-text">/api/webhooks/whatsapp</code>, <code class="font-mono ds-accent-text">/api/webhooks/github</code> e <code class="font-mono ds-urgent-text">/api/webhooks/ecommerce</code>
+                </p>
+            </div>
+        </div>
+
+        <!-- 4-Step Process Indicator + Dropdown Simulador de Webhooks -->
+        <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+            <!-- 4-Step Process (Fluxo Operacional Responsivo) -->
+            <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 px-3 py-1.5 ds-layer-inset ds-r-12 text-[11px] font-mono w-full sm:w-auto">
+                <span class="inline-flex items-center gap-1.5 ds-urgent-text font-bold">
+                    <span class="w-5 h-5 rounded-full inline-flex items-center justify-center ds-btn-urgent text-[10px] shrink-0">1</span>
+                    <span class="truncate">Inbox ({{ inbox_tasks|length }})</span>
+                </span>
+                <span class="hidden sm:inline ds-text-secondary">&rarr;</span>
+                <span class="inline-flex items-center gap-1.5 ds-accent-text font-semibold">
+                    <span class="w-5 h-5 rounded-full inline-flex items-center justify-center ds-btn-primary text-[10px] shrink-0">2</span>
+                    <span class="truncate">Fila</span>
+                </span>
+                <span class="hidden sm:inline ds-text-secondary">&rarr;</span>
+                <span class="inline-flex items-center gap-1.5 ds-text-secondary">
+                    <span class="w-5 h-5 rounded-full inline-flex items-center justify-center ds-layer-raised text-[10px] shrink-0">3</span>
+                    <span class="truncate">Execução</span>
+                </span>
+                <span class="hidden sm:inline ds-text-secondary">&rarr;</span>
+                <span class="inline-flex items-center gap-1.5 ds-text-secondary">
+                    <span class="w-5 h-5 rounded-full inline-flex items-center justify-center ds-layer-raised text-[10px] shrink-0">4</span>
+                    <span class="truncate">Concluído</span>
+                </span>
+            </div>
+
+            <!-- Feature 5: Dropdown Simulador de Webhooks com 1 Clique na UI -->
+            <div x-data="{ simOpen: false }" class="relative flex items-center gap-2 shrink-0">
+                <button
+                    type="button"
+                    @click="simOpen = !simOpen"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-medium"
+                >
+                    <span class="h-2 w-2 rounded-full" style="background: var(--ds-accent-primary);"></span>
+                    <span>Simular Webhook</span>
+                    <svg class="w-4 h-4 ds-text-secondary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+
+                <div
+                    x-show="simOpen"
+                    x-cloak
+                    @click.outside="simOpen = false"
+                    x-transition
+                    class="absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[90vw] ds-layer-popover ds-r-16 p-2 z-30 space-y-1.5"
+                >
+                    <button
+                        type="button"
+                        @click="simOpen = false"
+                        hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"source": "whatsapp"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="w-full text-left px-3 py-2 ds-r-12 hover:ds-layer-inset transition group"
+                    >
+                        <span class="block text-xs font-mono font-semibold ds-accent-text">
+                            Simular Áudio/Msg WhatsApp (Evolution API)
+                        </span>
+                        <span class="block text-[11px] ds-text-secondary">
+                            Cria tarefa de cliente na Inbox via Command Parser
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="simOpen = false"
+                        hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"source": "github"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="w-full text-left px-3 py-2 ds-r-12 hover:ds-layer-inset transition group"
+                    >
+                        <span class="block text-xs font-mono font-semibold ds-text-primary">
+                            Simular Issue GitHub (Deskify / Date &amp; Mate)
+                        </span>
+                        <span class="block text-[11px] ds-text-secondary">
+                            Cria issue técnica na Inbox vinculada ao external_ref
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="simOpen = false"
+                        hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"source": "ecommerce"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="w-full text-left px-3 py-2 ds-r-12 hover:ds-layer-inset transition group"
+                    >
+                        <span class="block text-xs font-mono font-semibold ds-urgent-text">
+                            Simular Alerta Shopee (Info Mundi / Mercuria Shop)
+                        </span>
+                        <span class="block text-[11px] ds-text-secondary">
+                            Cria alerta urgente (Urgência 5) na Inbox
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-3">
+        {% for task in inbox_tasks %}
+        <div
+            class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 ds-layer-inset ds-r-16 p-3.5 min-w-0"
+            {% if task.urgency == 5 %}style="border-color: var(--ds-accent-secondary);"{% endif %}
+        >
+            <div class="space-y-1.5 min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    {% with wh=task.webhook_events.first %}
+                        {% if wh %}
+                        <span class="ds-badge {% if wh.source == 'ecommerce' %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                            WEBHOOK: {{ wh.source }}
+                        </span>
+                        {% else %}
+                        <span class="ds-badge ds-badge-neutral">
+                            TRIAGEM
+                        </span>
+                        {% endif %}
+                    {% endwith %}
+
+                    <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                        #{{ task.workspace.slug }}
+                    </span>
+
+                    {% if task.project %}
+                    <span class="text-[11px] ds-text-secondary font-medium truncate">{{ task.project.name }}</span>
+                    {% endif %}
+
+                    {% if task.external_ref %}
+                    <span class="ds-badge ds-badge-neutral ds-text-primary truncate max-w-[180px]">
+                        {{ task.external_ref }}
+                    </span>
+                    {% endif %}
+
+                    <span class="ds-badge {% if task.priority_score >= 16 %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                        P:{{ task.priority_score }}
+                    </span>
+
+                    {% if task.assigned_to %}
+                    <span class="text-[10px] font-mono ds-accent-text">{{ task.assigned_to }}</span>
+                    {% endif %}
+                </div>
+
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                    hx-target="#task-drawer-container"
+                    hx-swap="innerHTML"
+                    class="text-left w-full min-w-0 group"
+                >
+                    <p class="text-xs sm:text-sm font-medium ds-text-primary group-hover:ds-accent-text break-words line-clamp-2 transition">
+                        {{ task.title }}
+                    </p>
+                </button>
+            </div>
+
+            <!-- Botões Táteis de Triagem Rápida -->
+            <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:triage_inbox' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                    hx-vals='{"shift": "morning"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    &rarr; Manhã
+                </button>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:triage_inbox' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                    hx-vals='{"shift": "afternoon"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    &rarr; Tarde
+                </button>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:triage_inbox' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                    hx-vals='{"shift": "night"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    &rarr; Noite
+                </button>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:triage_inbox' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                    hx-vals='{"top3": "1"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-2.5 py-1 ds-btn-urgent ds-r-8 text-xs font-mono font-semibold"
+                    title="Promover direto ao Top 3 do Dia"
+                >
+                    ★ Top 3
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                    hx-target="#task-drawer-container"
+                    hx-swap="innerHTML"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    Detalhes
+                </button>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:delete_task' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-2 py-1 ds-btn-tactile ds-r-8 text-xs font-mono ds-urgent-text"
+                    title="Descartar item"
+                >
+                    &times;
+                </button>
+            </div>
+        </div>
+        {% empty %}
+        <!-- Empty State Tátil (.ds-layer-inset + ícone 24px stroke 2px) -->
+        <div class="flex flex-col items-center justify-center ds-layer-inset ds-r-16 p-6 text-center">
+            <svg class="w-6 h-6 ds-text-secondary mb-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+            </svg>
+            <p class="text-xs font-mono ds-text-secondary">
+                INBOX LIMPA &mdash; Nenhum evento externo aguardando triagem neste contexto. Use o botão "Simular Webhook" acima para testar.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+</section>

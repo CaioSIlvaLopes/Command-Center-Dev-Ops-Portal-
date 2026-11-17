@@ -1,0 +1,796 @@
+<section
+    id="vault-view-section"
+    x-data="{
+        vaultLayout: localStorage.getItem('cc-vault-layout') || '{{ vault_layout|default:"grid" }}',
+        showForm: false,
+        editId: '',
+        formTitle: '',
+        formCategory: 'email',
+        formWorkspaceId: '{{ current_workspace.id|default:"" }}',
+        formProjectId: '{{ current_project.id|default:"" }}',
+        formUsername: '',
+        formSecret: '',
+        formShowSecretInput: false,
+        formUrl: '',
+        formRecovery: '',
+        formNotes: '',
+        revealedSecrets: {},
+        loadingId: null,
+        copiedKey: null,
+
+        setVaultLayout(mode) {
+            this.vaultLayout = mode;
+            try {
+                localStorage.setItem('cc-vault-layout', mode);
+            } catch (_) {}
+        },
+
+        openNewForm() {
+            this.editId = '';
+            this.formTitle = '';
+            this.formCategory = 'email';
+            this.formWorkspaceId = '{{ current_workspace.id|default:"" }}';
+            this.formProjectId = '{{ current_project.id|default:"" }}';
+            this.formUsername = '';
+            this.formSecret = '';
+            this.formShowSecretInput = false;
+            this.formUrl = '';
+            this.formRecovery = '';
+            this.formNotes = '';
+            this.showForm = true;
+        },
+
+        openEditForm(cred) {
+            this.editId = cred.id;
+            this.formTitle = cred.title;
+            this.formCategory = cred.category;
+            this.formWorkspaceId = cred.workspaceId;
+            this.formProjectId = cred.projectId || '';
+            this.formUsername = cred.username;
+            this.formSecret = '';
+            this.formShowSecretInput = false;
+            this.formUrl = cred.url || '';
+            this.formRecovery = cred.recovery || '';
+            this.formNotes = cred.notes || '';
+            this.showForm = true;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        generateStrongPassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*-_';
+            let pwd = '';
+            const array = new Uint32Array(16);
+            window.crypto.getRandomValues(array);
+            for (let i = 0; i < 16; i++) {
+                pwd += chars[array[i] % chars.length];
+            }
+            this.formSecret = pwd;
+            this.formShowSecretInput = true;
+        },
+
+        async toggleRevealSecret(id, url) {
+            if (this.revealedSecrets[id]) {
+                delete this.revealedSecrets[id];
+                this.revealedSecrets = { ...this.revealedSecrets };
+                return;
+            }
+            this.loadingId = id;
+            try {
+                const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const data = await resp.json();
+                if (data && data.ok) {
+                    this.revealedSecrets = { ...this.revealedSecrets, [id]: data.secret || '(vazio)' };
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                this.loadingId = null;
+            }
+        },
+
+        async copySecretFromApi(id, url) {
+            try {
+                let secretVal = this.revealedSecrets[id];
+                if (!secretVal) {
+                    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    const data = await resp.json();
+                    secretVal = (data && data.secret) || '';
+                }
+                if (navigator.clipboard && secretVal) {
+                    await navigator.clipboard.writeText(secretVal);
+                    this.copiedKey = 'sec-' + id;
+                    setTimeout(() => { if (this.copiedKey === 'sec-' + id) this.copiedKey = null; }, 2000);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+
+        async copyPlainText(text, key) {
+            try {
+                if (navigator.clipboard && text) {
+                    await navigator.clipboard.writeText(text);
+                    this.copiedKey = key;
+                    setTimeout(() => { if (this.copiedKey === key) this.copiedKey = null; }, 2000);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    }"
+    class="space-y-5 min-w-0"
+>
+    <!-- 1. Header da Visão do Cofre + KPIs + Barra de Busca, Categorias e Seletor Grade/Lista -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-4 min-w-0">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--ds-border-subtle);">
+            <div class="space-y-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="ds-badge ds-badge-urgent">&#128274; VAULT &bull; CRIPTOGRAFIA FERNET / SHA-256</span>
+                    <span class="ds-badge ds-badge-primary">Zero Senhas no DOM Estático</span>
+                </div>
+                <h2 class="text-base sm:text-lg font-bold ds-text-primary">
+                    Cofre de Credenciais, E-mails &amp; Acessos Operacionais
+                </h2>
+                <p class="text-xs ds-text-secondary">
+                    Centralize logins de lojas, e-mails corporativos, painéis de clientes, servidores VPS e tokens de API por Frente de Trabalho.
+                </p>
+            </div>
+
+            <!-- Contadores Rápidos + Botão + Nova Credencial -->
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                <div class="px-3 py-2 ds-layer-inset ds-r-12 text-center">
+                    <span class="block text-[10px] font-mono uppercase ds-text-secondary">Total Acessos</span>
+                    <span class="text-sm font-mono font-bold ds-text-primary">{{ vault_total_count }}</span>
+                </div>
+                <div class="px-3 py-2 ds-layer-inset ds-r-12 text-center">
+                    <span class="block text-[10px] font-mono uppercase ds-text-secondary">E-mails / Lojas</span>
+                    <span class="text-sm font-mono font-bold ds-urgent-text">{{ vault_email_ecom_count }}</span>
+                </div>
+                <div class="px-3 py-2 ds-layer-inset ds-r-12 text-center">
+                    <span class="block text-[10px] font-mono uppercase ds-text-secondary">Infra / APIs</span>
+                    <span class="text-sm font-mono font-bold ds-accent-text">{{ vault_infra_api_count }}</span>
+                </div>
+
+                <button
+                    type="button"
+                    @click="showForm ? (showForm = false) : openNewForm()"
+                    class="px-4 py-2.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold inline-flex items-center gap-1.5"
+                >
+                    <span x-text="showForm && !editId ? 'Fechar Formulário' : '+ Nova Credencial'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtros por Categoria em Cavidade .ds-layer-inset + Seletor de Exibição (Grade vs Lista) + Busca Rápida -->
+        <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div class="overflow-x-auto no-scrollbar flex items-center gap-1.5 py-1.5 px-1.5 ds-layer-inset ds-r-12 max-w-full">
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=vault&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&vault_category=all&q={{ vault_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if vault_category == 'all' or not vault_category %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Todas ({{ vault_total_count }})
+                </button>
+                {% for cat_code, cat_label in vault_categories %}
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=vault&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&vault_category={{ cat_code }}&q={{ vault_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if vault_category == cat_code %}ds-btn-urgent font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    {{ cat_label }}
+                </button>
+                {% endfor %}
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2.5 shrink-0">
+                <!-- Seletor Tátil Entalhado: Grade (Cards) vs Lista Compacta -->
+                <div class="ds-layer-inset ds-r-12 p-1 flex items-center gap-1 shrink-0 self-start sm:self-auto">
+                    <button
+                        type="button"
+                        @click="setVaultLayout('grid')"
+                        :class="vaultLayout === 'grid' ? 'ds-layer-raised ds-accent-text font-bold' : 'ds-text-secondary hover:ds-text-primary'"
+                        class="px-3 py-1.5 ds-r-8 text-xs font-mono transition inline-flex items-center gap-1.5"
+                        title="Exibir em Grade de Cards"
+                    >
+                        <span>&#128450;&#65039; Grade (Cards)</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="setVaultLayout('list')"
+                        :class="vaultLayout === 'list' ? 'ds-layer-raised ds-accent-text font-bold' : 'ds-text-secondary hover:ds-text-primary'"
+                        class="px-3 py-1.5 ds-r-8 text-xs font-mono transition inline-flex items-center gap-1.5"
+                        title="Exibir em Lista Compacta (Tabela Tátil)"
+                    >
+                        <span>&#128203; Lista</span>
+                    </button>
+                </div>
+
+                <!-- Busca Textual no Cofre -->
+                <form
+                    hx-get="{% url 'tasks:dashboard' %}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="flex items-center gap-2 w-full sm:w-64 shrink-0"
+                >
+                    <input type="hidden" name="view" value="vault" />
+                    <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                    <input type="hidden" name="project" value="{{ current_project_id }}" />
+                    <input type="hidden" name="vault_category" value="{{ vault_category }}" />
+                    <div class="relative flex-1 min-w-0">
+                        <input
+                            type="text"
+                            name="q"
+                            value="{{ vault_search_query }}"
+                            placeholder="Buscar e-mail, loja ou nota..."
+                            class="w-full ds-input ds-layer-inset ds-r-12 pl-3 pr-8 py-1.5 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                        {% if vault_search_query %}
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:dashboard' %}?view=vault&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&vault_category={{ vault_category }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            hx-push-url="true"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono ds-urgent-text"
+                            title="Limpar busca"
+                        >
+                            &times;
+                        </button>
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="px-2.5 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono shrink-0">
+                        Filtrar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2. Formulário Tátil de Criação / Edição com Gerador de Senha Forte -->
+        <div x-show="showForm" x-cloak class="pt-3 border-t" style="border-color: var(--ds-border-subtle);">
+            <form
+                hx-post="{% url 'tasks:vault_save' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault&vault_category={{ vault_category }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="ds-layer-inset ds-r-16 p-4 space-y-4"
+            >
+                <input type="hidden" name="credential_id" :value="editId" />
+                <input type="hidden" name="view" value="vault" />
+
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-mono font-bold uppercase ds-accent-text" x-text="editId ? 'Editar Credencial #' + editId : 'Cadastrar Nova Credencial no Cofre'"></span>
+                    <button type="button" @click="showForm = false" class="px-2 py-1 ds-btn-tactile ds-r-8 text-xs font-mono">
+                        Cancelar &times;
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="lg:col-span-2">
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Título do Acesso / Serviço *
+                        </label>
+                        <input
+                            type="text"
+                            name="title"
+                            x-model="formTitle"
+                            required
+                            placeholder="Ex: Conta Principal Shopee, E-mail Comercial WSA, VPS Produção"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Categoria *
+                        </label>
+                        <select
+                            name="category"
+                            x-model="formCategory"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                        >
+                            {% for cat_code, cat_label in vault_categories %}
+                            <option value="{{ cat_code }}">{{ cat_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Frente de Trabalho *
+                        </label>
+                        <select
+                            name="workspace_id"
+                            x-model="formWorkspaceId"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                        >
+                            {% for ws in workspaces %}
+                            <option value="{{ ws.id }}">#{{ ws.slug }} &mdash; {{ ws.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            E-mail / Login / Usuário *
+                        </label>
+                        <input
+                            type="text"
+                            name="username_or_email"
+                            x-model="formUsername"
+                            required
+                            placeholder="contato@wsacreative.com.br ou root"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-[10px] font-mono uppercase ds-text-secondary">
+                                Senha / Chave Secreta <span x-show="editId" class="ds-urgent-text">(Deixe vazio p/ manter)</span>
+                            </label>
+                            <button
+                                type="button"
+                                @click="generateStrongPassword()"
+                                class="text-[10px] font-mono ds-accent-text hover:underline"
+                                title="Gerar senha forte de 16 caracteres"
+                            >
+                                &#9889; Gerar Senha Forte
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <input
+                                :type="formShowSecretInput ? 'text' : 'password'"
+                                name="secret"
+                                x-model="formSecret"
+                                :required="!editId"
+                                placeholder="Senha ou Token..."
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                            <button
+                                type="button"
+                                @click="formShowSecretInput = !formShowSecretInput"
+                                class="px-2.5 py-2 ds-btn-tactile ds-r-12 text-xs font-mono shrink-0"
+                                title="Mostrar/Ocultar campo de senha"
+                            >
+                                &#128065;
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Projeto / Loja Vinculada (Opcional)
+                        </label>
+                        <select
+                            name="project_id"
+                            x-model="formProjectId"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                        >
+                            <option value="">(Geral da Frente)</option>
+                            {% for proj in all_projects %}
+                            <option value="{{ proj.id }}">{{ proj.name }} (#{{ proj.workspace.slug }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            URL do Painel / Login (Opcional)
+                        </label>
+                        <input
+                            type="url"
+                            name="service_url"
+                            x-model="formUrl"
+                            placeholder="https://seller.shopee.com.br"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Recuperação / Dica de 2FA (Opcional)
+                        </label>
+                        <input
+                            type="text"
+                            name="recovery_info"
+                            x-model="formRecovery"
+                            placeholder="Ex: 2FA no Authy do celular final 9988 / E-mail backup..."
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                        Notas Técnicas / Observações (Opcional)
+                    </label>
+                    <textarea
+                        name="notes"
+                        x-model="formNotes"
+                        rows="2"
+                        placeholder="IP do servidor, porta SSH, instruções de acesso..."
+                        class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                    ></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-2">
+                    <button
+                        type="submit"
+                        class="px-5 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"
+                    >
+                        &#128274; Criptografar &amp; Salvar no Cofre
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3A. Visualização em Grade de Cards (x-show="vaultLayout === 'grid'") -->
+    <div
+        id="vault-grid-container"
+        x-show="vaultLayout === 'grid'"
+        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5"
+    >
+        {% for cred in vault_credentials %}
+        <div
+            data-vault-card-id="{{ cred.id }}"
+            class="ds-layer-raised ds-r-16 p-4 flex flex-col justify-between space-y-3.5 min-w-0"
+        >
+            <div class="space-y-3 min-w-0">
+                <!-- Topo: Badges de Frente, Projeto e Categoria -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <span class="ds-badge {% if cred.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                            #{{ cred.workspace.slug }}
+                        </span>
+                        {% if cred.project %}
+                        <span class="ds-badge ds-badge-neutral ds-text-primary truncate max-w-[140px]">
+                            {{ cred.project.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <span class="ds-badge {% if cred.is_urgent_category %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                        {{ cred.get_category_display }}
+                    </span>
+                </div>
+
+                <!-- Título + Link Direto -->
+                <div class="flex items-start justify-between gap-2 min-w-0">
+                    <h3 class="text-sm font-bold ds-text-primary break-words min-w-0">
+                        {{ cred.title }}
+                    </h3>
+                    {% if cred.service_url %}
+                    <a
+                        href="{{ cred.service_url }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="shrink-0 px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-accent-text"
+                        title="Abrir {{ cred.service_url }}"
+                    >
+                        Abrir&nearr;
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Cavidade 1 (.ds-layer-inset): E-mail / Login + Copiar em 1 Clique -->
+                <div class="ds-layer-inset ds-r-12 p-2.5 space-y-1 min-w-0">
+                    <span class="block text-[10px] font-mono uppercase ds-text-secondary">
+                        E-mail / Login / Usuário
+                    </span>
+                    <div class="flex items-center justify-between gap-2 min-w-0">
+                        <span class="text-xs font-mono font-semibold ds-text-primary truncate select-all" title="{{ cred.username_or_email }}">
+                            {{ cred.username_or_email }}
+                        </span>
+                        <button
+                            type="button"
+                            @click="copyPlainText('{{ cred.username_or_email|escapejs }}', 'usr-{{ cred.id }}')"
+                            class="shrink-0 px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            title="Copiar E-mail / Usuário"
+                        >
+                            <span x-text="copiedKey === 'usr-{{ cred.id }}' ? 'Copiado!' : 'Copiar'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cavidade 2 (.ds-layer-inset): Senha / Chave Secreta (Oculta por padrão, buscada sob demanda) -->
+                <div class="ds-layer-inset ds-r-12 p-2.5 space-y-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-mono uppercase ds-text-secondary">
+                            Senha / Token Criptografado
+                        </span>
+                        <span
+                            x-show="revealedSecrets[{{ cred.id }}]"
+                            x-cloak
+                            class="text-[10px] font-mono ds-urgent-text"
+                        >
+                            Visível
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 min-w-0">
+                        <span
+                            class="text-xs font-mono font-bold truncate select-all"
+                            :class="revealedSecrets[{{ cred.id }}] ? 'ds-urgent-text' : 'ds-text-secondary'"
+                            x-text="revealedSecrets[{{ cred.id }}] ? revealedSecrets[{{ cred.id }}] : '••••••••••••••'"
+                        >
+                            ••••••••••••••
+                        </span>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button
+                                type="button"
+                                @click="toggleRevealSecret({{ cred.id }}, '{% url 'tasks:vault_secret' cred.id %}')"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                                title="Revelar / Ocultar Senha"
+                            >
+                                <span x-text="revealedSecrets[{{ cred.id }}] ? 'Ocultar' : '&#128065; Ver'"></span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="copySecretFromApi({{ cred.id }}, '{% url 'tasks:vault_secret' cred.id %}')"
+                                class="px-2.5 py-1 ds-btn-primary ds-r-8 text-[10px] font-mono font-bold"
+                                title="Copiar Senha Descriptografada"
+                            >
+                                <span x-text="copiedKey === 'sec-{{ cred.id }}' ? 'Copiado!' : '&#128203; Senha'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recuperação / 2FA e Notas -->
+                {% if cred.recovery_info %}
+                <div class="px-2.5 py-1.5 ds-layer-inset ds-r-8 text-[11px] font-mono ds-text-secondary break-words">
+                    <strong class="ds-urgent-text">2FA / Rec:</strong> {{ cred.recovery_info }}
+                </div>
+                {% endif %}
+
+                {% if cred.notes %}
+                <p class="text-[11px] ds-text-secondary break-words leading-relaxed">
+                    {{ cred.notes }}
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Rodapé do Card: Data de Atualização + Editar / Excluir -->
+            <div class="flex items-center justify-between gap-2 pt-2.5 border-t text-[10px] font-mono ds-text-secondary" style="border-color: var(--ds-border-subtle);">
+                <span>Atualizado {{ cred.updated_at|date:"d/m/Y H:i" }}</span>
+
+                <div class="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        @click="openEditForm({
+                            id: '{{ cred.id }}',
+                            title: '{{ cred.title|escapejs }}',
+                            category: '{{ cred.category|escapejs }}',
+                            workspaceId: '{{ cred.workspace_id }}',
+                            projectId: '{{ cred.project_id|default:"" }}',
+                            username: '{{ cred.username_or_email|escapejs }}',
+                            url: '{{ cred.service_url|escapejs }}',
+                            recovery: '{{ cred.recovery_info|escapejs }}',
+                            notes: '{{ cred.notes|escapejs }}'
+                        })"
+                        class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                    >
+                        Editar
+                    </button>
+
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:vault_delete' cred.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault&vault_category={{ vault_category }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        hx-confirm="Tem certeza que deseja remover '{{ cred.title }}' do Cofre?"
+                        class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text"
+                    >
+                        Excluir
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="md:col-span-2 xl:col-span-3 ds-layer-inset ds-r-16 p-8 text-center space-y-2">
+            <p class="text-xs font-mono font-bold ds-text-primary uppercase">
+                Nenhuma credencial encontrada para este filtro
+            </p>
+            <p class="text-xs ds-text-secondary">
+                Clique em <strong>+ Nova Credencial</strong> acima para guardar e-mails, senhas de lojas ou chaves de servidores com criptografia.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 3B. Visualização em Lista Compacta / Tabela Tátil (x-show="vaultLayout === 'list'") -->
+    <div
+        id="vault-list-container"
+        x-show="vaultLayout === 'list'"
+        x-cloak
+        class="ds-layer-raised ds-r-16 overflow-hidden min-w-0"
+    >
+        {% if vault_credentials %}
+        <div class="overflow-x-auto min-w-0">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="ds-layer-inset text-[10px] font-mono font-bold uppercase tracking-wider ds-text-secondary border-b" style="border-color: var(--ds-border-subtle);">
+                        <th class="py-3 px-4">Serviço / Frente &amp; Projeto</th>
+                        <th class="py-3 px-3">Login / E-mail / Usuário</th>
+                        <th class="py-3 px-3">Senha / Token (Sob Demanda)</th>
+                        <th class="py-3 px-3">2FA / Recuperação &amp; Notas</th>
+                        <th class="py-3 px-4 text-right">Ações Rápidas</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y text-xs" style="border-color: var(--ds-border-subtle);">
+                    {% for cred in vault_credentials %}
+                    <tr
+                        data-vault-row-id="{{ cred.id }}"
+                        class="hover:ds-layer-hover transition"
+                        style="border-color: var(--ds-border-subtle);"
+                    >
+                        <!-- 1. Serviço / Título & Frente -->
+                        <td class="py-3 px-4 align-middle min-w-[220px] max-w-[280px]">
+                            <div class="space-y-1 min-w-0">
+                                <div class="font-bold ds-text-primary truncate" title="{{ cred.title }}">
+                                    {{ cred.title }}
+                                </div>
+                                <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                                    <span class="ds-badge {% if cred.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                                        #{{ cred.workspace.slug }}
+                                    </span>
+                                    {% if cred.project %}
+                                    <span class="ds-badge ds-badge-neutral ds-text-primary truncate max-w-[120px]">
+                                        {{ cred.project.name }}
+                                    </span>
+                                    {% endif %}
+                                    <span class="ds-badge {% if cred.is_urgent_category %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                                        {{ cred.get_category_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- 2. Login / E-mail / Usuário -->
+                        <td class="py-3 px-3 align-middle min-w-[220px] max-w-[260px]">
+                            <div class="flex items-center justify-between gap-2 ds-layer-inset ds-r-8 px-2.5 py-1.5 min-w-0">
+                                <span
+                                    class="font-mono text-xs ds-text-primary truncate select-all"
+                                    title="{{ cred.username_or_email }}"
+                                >
+                                    {{ cred.username_or_email }}
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="copyPlainText('{{ cred.username_or_email|escapejs }}', 'list-usr-{{ cred.id }}')"
+                                    class="shrink-0 px-2 py-0.5 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                                    title="Copiar Login / E-mail"
+                                >
+                                    <span x-text="copiedKey === 'list-usr-{{ cred.id }}' ? 'Copiado!' : '&#128203;'"></span>
+                                </button>
+                            </div>
+                        </td>
+
+                        <!-- 3. Senha / Token (Sob Demanda) -->
+                        <td class="py-3 px-3 align-middle min-w-[240px] max-w-[290px]">
+                            <div class="flex items-center justify-between gap-2 ds-layer-inset ds-r-8 px-2.5 py-1.5 font-mono min-w-0">
+                                <span
+                                    class="text-xs font-bold truncate select-all"
+                                    :class="revealedSecrets[{{ cred.id }}] ? 'ds-urgent-text' : 'ds-text-secondary'"
+                                    x-text="revealedSecrets[{{ cred.id }}] ? revealedSecrets[{{ cred.id }}] : '••••••••••••'"
+                                >
+                                    ••••••••••••
+                                </span>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <button
+                                        type="button"
+                                        @click="toggleRevealSecret({{ cred.id }}, '{% url 'tasks:vault_secret' cred.id %}')"
+                                        class="px-2 py-0.5 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                                        title="Revelar / Ocultar Senha"
+                                    >
+                                        <span x-text="revealedSecrets[{{ cred.id }}] ? 'Ocultar' : '&#128065;'"></span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="copySecretFromApi({{ cred.id }}, '{% url 'tasks:vault_secret' cred.id %}')"
+                                        class="px-2 py-0.5 ds-btn-primary ds-r-8 text-[10px] font-mono font-bold"
+                                        title="Copiar Senha Descriptografada"
+                                    >
+                                        <span x-text="copiedKey === 'sec-{{ cred.id }}' ? 'Copiado!' : '&#128203; Senha'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- 4. 2FA / Recuperação & Notas Rápidas -->
+                        <td class="py-3 px-3 align-middle max-w-[200px]">
+                            <div class="space-y-0.5 min-w-0">
+                                {% if cred.recovery_info %}
+                                <div
+                                    class="text-[11px] font-mono ds-urgent-text truncate max-w-[180px]"
+                                    title="2FA / Recuperação: {{ cred.recovery_info }}"
+                                >
+                                    2FA: {{ cred.recovery_info }}
+                                </div>
+                                {% endif %}
+                                {% if cred.notes %}
+                                <div
+                                    class="text-[11px] ds-text-secondary truncate max-w-[180px]"
+                                    title="{{ cred.notes }}"
+                                >
+                                    {{ cred.notes }}
+                                </div>
+                                {% endif %}
+                                {% if not cred.recovery_info and not cred.notes %}
+                                <span class="text-[10px] font-mono ds-text-secondary">&mdash;</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- 5. Ações Rápidas (Alinhadas à Direita) -->
+                        <td class="py-3 px-4 align-middle text-right whitespace-nowrap">
+                            <div class="inline-flex items-center justify-end gap-1.5">
+                                {% if cred.service_url %}
+                                <a
+                                    href="{{ cred.service_url }}"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-accent-text"
+                                    title="Abrir {{ cred.service_url }}"
+                                >
+                                    Abrir &nearr;
+                                </a>
+                                {% endif %}
+
+                                <button
+                                    type="button"
+                                    @click="openEditForm({
+                                        id: '{{ cred.id }}',
+                                        title: '{{ cred.title|escapejs }}',
+                                        category: '{{ cred.category|escapejs }}',
+                                        workspaceId: '{{ cred.workspace_id }}',
+                                        projectId: '{{ cred.project_id|default:"" }}',
+                                        username: '{{ cred.username_or_email|escapejs }}',
+                                        url: '{{ cred.service_url|escapejs }}',
+                                        recovery: '{{ cred.recovery_info|escapejs }}',
+                                        notes: '{{ cred.notes|escapejs }}'
+                                    })"
+                                    class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                                >
+                                    Editar
+                                </button>
+
+                                <button
+                                    type="button"
+                                    hx-post="{% url 'tasks:vault_delete' cred.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault&vault_category={{ vault_category }}"
+                                    hx-target="#dashboard-content"
+                                    hx-swap="innerHTML"
+                                    hx-confirm="Tem certeza que deseja remover '{{ cred.title }}' do Cofre?"
+                                    class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text"
+                                >
+                                    Excluir
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="ds-layer-inset ds-r-16 p-8 m-4 text-center space-y-2">
+            <p class="text-xs font-mono font-bold ds-text-primary uppercase">
+                Nenhuma credencial encontrada para este filtro
+            </p>
+            <p class="text-xs ds-text-secondary">
+                Clique em <strong>+ Nova Credencial</strong> acima para guardar e-mails, senhas de lojas ou chaves de servidores com criptografia.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</section>

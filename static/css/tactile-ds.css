@@ -1,0 +1,461 @@
+/* ==========================================================================
+   COMMAND CENTER - TACTILE / SOFT-NEUMORPHIC DESIGN SYSTEM (PHASE 4.1)
+   Dual-Theme Engine: tactile-dark (#0f172a) & tactile-sand (#e8e2d7)
+   Responsive Anti-Overflow & Mobile Tactile Shadow Physics
+   ========================================================================== */
+
+:root,
+[data-theme="tactile-dark"] {
+    --ds-bg-base: #0f172a;
+    --ds-bg-surface: #1e293b;
+    --ds-bg-elevated: #26354d;
+    --ds-text-primary: #f8fafc;
+    --ds-text-secondary: #94a3b8;
+    --ds-accent-primary: #3b82f6;
+    --ds-accent-primary-hover: #2563eb;
+    --ds-accent-secondary: #f97316;
+    --ds-shadow-dark: rgba(2, 6, 23, 0.85);
+    --ds-shadow-light: rgba(51, 65, 85, 0.38);
+    --ds-bevel-light: rgba(255, 255, 255, 0.08);
+    --ds-border-subtle: rgba(148, 163, 184, 0.16);
+}
+
+[data-theme="tactile-sand"] {
+    --ds-bg-base: #e8e2d7;
+    --ds-bg-surface: #f1ece2;
+    --ds-bg-elevated: #f8f4ec;
+    --ds-text-primary: #1f2d2f;
+    --ds-text-secondary: #6c675f;
+    --ds-accent-primary: #164e56;
+    --ds-accent-primary-hover: #103b42;
+    --ds-accent-secondary: #d97736;
+    --ds-shadow-dark: rgba(182, 173, 158, 0.78);
+    --ds-shadow-light: rgba(255, 255, 255, 0.92);
+    --ds-bevel-light: rgba(255, 255, 255, 0.75);
+    --ds-border-subtle: rgba(31, 45, 47, 0.10);
+}
+
+/* Global Anti-Overflow Protection */
+html,
+body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* Base Body & Theme Transitions */
+body.ds-app-body {
+    background-color: var(--ds-bg-base) !important;
+    color: var(--ds-text-primary) !important;
+    transition: background-color 0.22s ease, color 0.22s ease;
+}
+
+/* Semantic Color Helpers */
+.ds-text-primary { color: var(--ds-text-primary) !important; }
+.ds-text-secondary { color: var(--ds-text-secondary) !important; }
+.ds-text-accent,
+.ds-accent-text { color: var(--ds-accent-primary) !important; }
+.ds-text-urgent,
+.ds-urgent-text { color: var(--ds-accent-secondary) !important; }
+.ds-bg-base { background-color: var(--ds-bg-base) !important; }
+.ds-bg-surface { background-color: var(--ds-bg-surface) !important; }
+
+/* ==========================================================================
+   1. FOUNDATIONS: CAMADAS & NÍVEIS DE ELEVAÇÃO (1 A 5 + INSET/PRESSED)
+   ========================================================================== */
+
+/* Level 1: Flat / Base Layer */
+.ds-layer-base {
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-border-subtle);
+    color: var(--ds-text-primary);
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Level 2: Hover Layer */
+.ds-layer-hover {
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-border-subtle);
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ds-layer-hover:hover,
+.ds-elevation-2 {
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 4px 4px 10px var(--ds-shadow-dark), -3px -3px 8px var(--ds-shadow-light);
+}
+
+/* Level 3: Raised Layer (Cards, KPIs, Columns) */
+.ds-layer-raised {
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 7px 7px 15px var(--ds-shadow-dark), -5px -5px 13px var(--ds-shadow-light);
+    color: var(--ds-text-primary);
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Level 4: Modal / Slide-Over Drawer */
+.ds-layer-modal {
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 14px 14px 30px var(--ds-shadow-dark), -8px -8px 20px var(--ds-shadow-light);
+    color: var(--ds-text-primary);
+}
+
+/* Level 5: Popover / Dropdown / Tooltips */
+.ds-layer-popover {
+    background: var(--ds-bg-elevated);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 18px 20px 38px var(--ds-shadow-dark);
+    color: var(--ds-text-primary);
+}
+
+/* Inset Layer (Cavidade Escavada - Inputs, Ctrl+K, Trilhos, Slots Vazios Top 3) */
+.ds-layer-inset {
+    background: var(--ds-bg-base);
+    box-shadow: inset 3px 3px 7px var(--ds-shadow-dark), inset -3px -3px 7px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    color: var(--ds-text-primary);
+}
+
+/* Pressed Layer (Estado Pressionado / Aba Ativa Afundada) */
+.ds-layer-pressed {
+    background: var(--ds-bg-base);
+    box-shadow: inset 5px 5px 11px var(--ds-shadow-dark), inset -4px -4px 9px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    color: var(--ds-text-primary);
+    transform: translateY(1px);
+}
+
+/* Mobile Tactile Shadow Reduction (< 640px) to Prevent Bleed/Overflow */
+@media (max-width: 640px) {
+    .ds-layer-raised {
+        box-shadow: 4px 4px 10px var(--ds-shadow-dark), -3px -3px 8px var(--ds-shadow-light);
+    }
+    .ds-top3-card:hover {
+        box-shadow: 5px 5px 12px var(--ds-shadow-dark), -3px -3px 9px var(--ds-shadow-light);
+    }
+    .ds-layer-modal {
+        box-shadow: 8px 8px 18px var(--ds-shadow-dark), -4px -4px 12px var(--ds-shadow-light);
+    }
+}
+
+/* ==========================================================================
+   2. ESCALAS PADRONIZADAS: RADIUS SCALE & BORDER THICKNESS TOKENS
+   ========================================================================== */
+
+.ds-r-4 { border-radius: 4px !important; }
+.ds-r-8 { border-radius: 8px !important; }
+.ds-r-12 { border-radius: 12px !important; }
+.ds-r-16 { border-radius: 16px !important; }
+.ds-r-24 { border-radius: 24px !important; }
+.ds-r-pill { border-radius: 9999px !important; }
+
+.ds-border-1 { border-width: 1px !important; border-style: solid; border-color: var(--ds-border-subtle); }
+.ds-border-2 { border-width: 2px !important; border-style: solid; border-color: var(--ds-accent-primary); }
+.ds-border-4 { border-width: 4px !important; border-style: solid; border-color: var(--ds-accent-secondary); }
+
+.ds-top3-card {
+    border: 1.5px solid var(--ds-accent-secondary) !important;
+}
+.ds-top3-card:hover {
+    box-shadow: 9px 9px 18px var(--ds-shadow-dark), -6px -6px 14px var(--ds-shadow-light);
+}
+
+/* ==========================================================================
+   3. CONTROLS: BOTÕES TÁTEIS, INPUTS, CHECKBOXES, RADIOS, SWITCHES
+   ========================================================================== */
+
+/* Primary Button (.ds-btn-primary) */
+.ds-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, var(--ds-accent-primary) 0%, var(--ds-accent-primary-hover) 100%);
+    color: #f8fafc !important;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.35),
+        4px 4px 10px var(--ds-shadow-dark),
+        -2px -2px 6px var(--ds-shadow-light);
+    font-weight: 600;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.ds-btn-primary:hover {
+    filter: brightness(1.07);
+}
+.ds-btn-primary:active,
+.ds-btn-primary.is-pressed {
+    transform: translateY(1px);
+    box-shadow:
+        inset 3px 3px 7px rgba(0, 0, 0, 0.45),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.12);
+}
+.ds-btn-primary:disabled,
+.ds-btn-disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+/* Secondary / Tactile Button (.ds-btn-tactile) */
+.ds-btn-tactile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    background: var(--ds-bg-surface);
+    color: var(--ds-text-primary);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 4px 4px 9px var(--ds-shadow-dark), -3px -3px 7px var(--ds-shadow-light);
+    border-radius: 12px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.ds-btn-tactile:hover {
+    color: var(--ds-accent-primary);
+}
+.ds-btn-tactile:active,
+.ds-btn-tactile.is-active {
+    background: var(--ds-bg-base);
+    box-shadow: inset 4px 4px 8px var(--ds-shadow-dark), inset -3px -3px 7px var(--ds-shadow-light);
+    transform: translateY(1px);
+}
+
+/* Urgent / Secondary Accent Button (.ds-btn-urgent) */
+.ds-btn-urgent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    background: var(--ds-accent-secondary);
+    color: #0f172a !important;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.35),
+        4px 4px 10px var(--ds-shadow-dark),
+        -2px -2px 6px var(--ds-shadow-light);
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.ds-btn-urgent:active {
+    transform: translateY(1px);
+    box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* Tactile Text Fields & Command Bar (.ds-input) */
+.ds-input {
+    background: var(--ds-bg-base);
+    color: var(--ds-text-primary);
+    box-shadow: inset 3px 3px 7px var(--ds-shadow-dark), inset -3px -3px 7px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: 12px;
+    transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.ds-input:focus,
+.ds-input:focus-within,
+.ds-input.is-focused {
+    outline: none;
+    border-color: var(--ds-accent-primary);
+    box-shadow:
+        0 0 0 2px var(--ds-accent-primary),
+        inset 3px 3px 7px var(--ds-shadow-dark),
+        inset -3px -3px 7px var(--ds-shadow-light);
+}
+.ds-input.is-error {
+    border-color: var(--ds-accent-secondary);
+    box-shadow:
+        0 0 0 2px var(--ds-accent-secondary),
+        inset 3px 3px 7px var(--ds-shadow-dark),
+        inset -3px -3px 7px var(--ds-shadow-light);
+}
+
+/* Custom Tactile Checkbox (20px x 20px, ds-r-8) */
+.ds-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--ds-bg-base);
+    box-shadow: inset 2.5px 2.5px 5px var(--ds-shadow-dark), inset -2px -2px 5px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.ds-checkbox.is-checked {
+    background: var(--ds-accent-primary);
+    border-color: var(--ds-accent-primary);
+    color: #f8fafc;
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.35),
+        2px 2px 6px var(--ds-shadow-dark);
+}
+
+/* Custom Tactile Radio (20px x 20px, pill) */
+.ds-radio {
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--ds-bg-base);
+    box-shadow: inset 2.5px 2.5px 5px var(--ds-shadow-dark), inset -2px -2px 5px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    cursor: pointer;
+}
+.ds-radio.is-checked::after,
+.ds-radio.is-selected::after {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 9999px;
+    background: var(--ds-accent-primary);
+    box-shadow: 1px 1px 3px var(--ds-shadow-dark);
+}
+
+/* Tactile Switch (Trilho escavado + Pino circular elevado) */
+.ds-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    border-radius: 9999px;
+    background: var(--ds-bg-base);
+    box-shadow: inset 3px 3px 6px var(--ds-shadow-dark), inset -2px -2px 5px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    padding: 3px;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+}
+.ds-switch.is-on {
+    border-color: var(--ds-accent-primary);
+}
+.ds-switch-thumb,
+.ds-switch:empty::after {
+    content: "";
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    background: var(--ds-bg-surface);
+    border: 1px solid var(--ds-bevel-light);
+    box-shadow: 2px 2px 5px var(--ds-shadow-dark), -1px -1px 3px var(--ds-shadow-light);
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease;
+    display: block;
+}
+.ds-switch.is-on .ds-switch-thumb,
+.ds-switch.is-on:empty::after {
+    transform: translateX(22px);
+    background: var(--ds-accent-primary);
+}
+
+/* Linear Progress Bar */
+.ds-progress-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 9999px;
+    background: var(--ds-bg-base);
+    box-shadow: inset 2px 2px 5px var(--ds-shadow-dark), inset -2px -2px 5px var(--ds-shadow-light);
+    border: 1px solid var(--ds-border-subtle);
+    overflow: hidden;
+}
+.ds-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--ds-accent-primary) 0%, var(--ds-accent-primary-hover) 100%);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    transition: width 0.35s ease;
+}
+.ds-progress-fill.is-secondary,
+.ds-progress-fill.ds-progress-fill-urgent {
+    background: var(--ds-accent-secondary);
+}
+
+/* Badges Táteis */
+.ds-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    background: var(--ds-bg-base);
+    border: 1px solid var(--ds-border-subtle);
+    box-shadow: inset 1px 1px 3px var(--ds-shadow-dark), inset -1px -1px 2px var(--ds-shadow-light);
+}
+.ds-badge-neutral {
+    color: var(--ds-text-secondary);
+}
+.ds-badge-primary {
+    background: var(--ds-accent-primary);
+    color: #f8fafc !important;
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 2px 2px 5px var(--ds-shadow-dark);
+}
+.ds-badge-secondary,
+.ds-badge-urgent {
+    background: var(--ds-accent-secondary);
+    color: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 2px 2px 5px var(--ds-shadow-dark);
+}
+
+/* Adaptação Automática para o Tema Claro (tactile-sand) */
+[data-theme="tactile-sand"] .bg-\[\#0f172a\],
+[data-theme="tactile-sand"] .bg-\[\#0f172a\]\/95,
+[data-theme="tactile-sand"] .bg-\[\#0f172a\]\/70,
+[data-theme="tactile-sand"] .bg-\[\#0f172a\]\/60,
+[data-theme="tactile-sand"] .bg-\[\#0f172a\]\/50 {
+    background-color: var(--ds-bg-base) !important;
+}
+
+[data-theme="tactile-sand"] .bg-\[\#1e293b\],
+[data-theme="tactile-sand"] .bg-\[\#1e293b\]\/95,
+[data-theme="tactile-sand"] .bg-\[\#1e293b\]\/60,
+[data-theme="tactile-sand"] .bg-\[\#1e293b\]\/50,
+[data-theme="tactile-sand"] .bg-\[\#1e293b\]\/40 {
+    background-color: var(--ds-bg-surface) !important;
+}
+
+[data-theme="tactile-sand"] .text-\[\#f8fafc\] {
+    color: var(--ds-text-primary) !important;
+}
+
+[data-theme="tactile-sand"] .text-\[\#94a3b8\] {
+    color: var(--ds-text-secondary) !important;
+}
+
+[data-theme="tactile-sand"] .border-\[\#334155\],
+[data-theme="tactile-sand"] .border-\[\#334155\]\/60 {
+    border-color: var(--ds-border-subtle) !important;
+}
+
+[data-theme="tactile-sand"] .text-\[\#3b82f6\] {
+    color: var(--ds-accent-primary) !important;
+}
+
+[data-theme="tactile-sand"] .bg-\[\#3b82f6\] {
+    background-color: var(--ds-accent-primary) !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="tactile-sand"] .text-\[\#f97316\] {
+    color: var(--ds-accent-secondary) !important;
+}
+
+[data-theme="tactile-sand"] .bg-\[\#f97316\] {
+    background-color: var(--ds-accent-secondary) !important;
+    color: #f8fafc !important;
+}

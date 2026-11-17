@@ -1,0 +1,140 @@
+{% if feedback_message %}
+<div
+    x-data="{ show: true }"
+    x-show="show"
+    x-init="setTimeout(() => show = false, 5500)"
+    class="flex items-center justify-between gap-3 px-4 py-3 ds-layer-raised ds-r-16 {% if feedback_level == 'warning' %}ds-top3-card ds-urgent-text{% else %}ds-text-primary{% endif %} text-xs font-mono"
+>
+    <div class="flex items-center gap-2.5 min-w-0">
+        <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: {% if feedback_level == 'warning' %}var(--ds-accent-secondary){% else %}var(--ds-accent-primary){% endif %};"></span>
+        <span class="truncate">{{ feedback_message }}</span>
+    </div>
+    <button type="button" @click="show = false" class="px-2 py-0.5 ds-btn-tactile ds-r-8 text-xs shrink-0">&times;</button>
+</div>
+{% endif %}
+
+<!-- Feature 4: Faixa de Contexto + Launchpad Rápido de Projetos & Ambientes (Tactile Surface Responsivo) -->
+<div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 px-3.5 sm:px-4 py-3 ds-layer-raised ds-r-16 min-w-0">
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5 min-w-0">
+        <span class="text-[11px] font-mono font-bold uppercase tracking-wider ds-text-secondary shrink-0">Launchpad:</span>
+
+        {% if current_project %}
+        <button
+            type="button"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="shrink-0 whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 ds-btn-urgent ds-r-8 text-[11px] font-mono"
+        >
+            <span>Filtro: {{ current_project.name }} &times;</span>
+        </button>
+        {% endif %}
+
+        {% for proj in projects %}
+        <div class="shrink-0 whitespace-nowrap inline-flex items-center ds-layer-inset ds-r-12 p-0.5 overflow-hidden">
+            <button
+                type="button"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ proj.workspace.slug }}&project={{ proj.id }}&view={{ view_mode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="px-2.5 py-1 ds-r-8 text-xs font-medium {% if current_project_id == proj.id %}ds-btn-primary{% else %}ds-text-primary hover:ds-accent-text{% endif %} transition"
+                title="Filtrar tarefas do projeto {{ proj.name }}"
+            >
+                {{ proj.name }}
+            </button>
+            {% if proj.repo_url %}
+            <a
+                href="{{ proj.repo_url }}"
+                target="_blank"
+                rel="noopener"
+                class="px-2 py-1 text-[10px] font-mono ds-text-secondary hover:ds-accent-text transition"
+                title="Abrir Repositório GitHub de {{ proj.name }}"
+            >
+                Git&nearr;
+            </a>
+            {% endif %}
+            {% if proj.admin_or_panel_url %}
+            <a
+                href="{{ proj.admin_or_panel_url }}"
+                target="_blank"
+                rel="noopener"
+                class="px-2 py-1 text-[10px] font-mono ds-urgent-text hover:underline transition"
+                title="Abrir Painel / Seller Centre de {{ proj.name }}"
+            >
+                Painel&nearr;
+            </a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono ds-text-secondary shrink-0">
+        <span>Ativas: <strong class="ds-text-primary">{{ total_active_count }}</strong></span>
+        <span>&bull;</span>
+        <span>Concluídas Hoje: <strong class="ds-accent-text">{{ done_today_count }}</strong></span>
+        <span>&bull;</span>
+        <span>Horas Geral: <strong class="ds-accent-text">{{ total_logged_all_formatted }}</strong></span>
+    </div>
+</div>
+
+{% if view_mode == 'settings' %}
+    {% include "partials/settings_view.html" %}
+{% elif view_mode == 'vault' %}
+    {% include "partials/vault_view.html" %}
+{% elif view_mode == 'styleguide' %}
+    {% include "partials/styleguide_view.html" %}
+{% elif view_mode == 'integrations' %}
+    {% include "partials/integrations_view.html" %}
+{% elif view_mode == 'analytics' %}
+    {% include "partials/analytics_view.html" %}
+{% elif view_mode == 'kanban' %}
+    {% include "partials/kanban_board.html" %}
+{% elif view_mode == 'list' %}
+    {% include "partials/list_view.html" %}
+{% else %}
+    <!-- 1. MODO FOCO: TOP 3 DO DIA -->
+    {% include "partials/top_three.html" %}
+
+    <!-- 2. FILA DIVIDIDA POR TURNOS (MANHÃ, TARDE, NOITE) -->
+    {% include "partials/shift_queue.html" %}
+
+    <!-- 3. INBOX & TRIAGEM DE WEBHOOKS -->
+    {% include "partials/inbox_list.html" %}
+{% endif %}
+
+{% if is_htmx_oob %}
+<!-- Out-of-Band Swaps para manter Header de Contexto, Sidebar, Tags Ctrl+K, Cronômetro e Input de Workspace sincronizados -->
+<div
+    id="workspace-context-bar"
+    hx-swap-oob="true"
+    class="w-full py-2 px-3 sm:px-6 border-b border-[#334155] ds-layer-base shrink-0"
+>
+    {% include "partials/context_bar.html" %}
+</div>
+
+<div hx-swap-oob="innerHTML:#sidebar-desktop-container">
+    {% include "partials/sidebar_content.html" %}
+</div>
+
+<div hx-swap-oob="innerHTML:#sidebar-mobile-container">
+    {% include "partials/sidebar_content.html" %}
+</div>
+
+<div hx-swap-oob="innerHTML:#command-bar-tags-container">
+    {% include "partials/command_bar_tags.html" %}
+</div>
+
+<div id="active-timer-container" hx-swap-oob="true" class="min-w-0 max-w-[230px] sm:max-w-[320px] xl:w-[370px] xl:max-w-none">
+    {% include "partials/active_timer.html" %}
+</div>
+
+<input
+    type="hidden"
+    id="command-bar-workspace-input"
+    name="workspace"
+    value="{{ current_workspace_slug }}"
+    hx-swap-oob="true"
+/>
+{% endif %}

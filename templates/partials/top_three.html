@@ -1,0 +1,237 @@
+<section id="top-three-section" class="space-y-3.5">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <span class="inline-flex items-center justify-center w-7 h-7 shrink-0 ds-layer-raised ds-r-8 ds-urgent-text">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+            </span>
+            <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary flex flex-wrap items-center gap-2">
+                <span>Modo Foco &mdash; Top 3 do Dia</span>
+                <span class="ds-badge ds-badge-urgent">
+                    {{ top_three_tasks|length }}/3 SLOTS
+                </span>
+            </h2>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                hx-post="{% url 'tasks:recalculate' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono whitespace-nowrap"
+                title="Executar rotina Celery de recálculo de prioridades e auto-preenchimento do Top 3"
+            >
+                <svg class="w-4 h-4 ds-urgent-text" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span>Recalcular Prioridades</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 items-stretch">
+        {% for task in top_three_tasks %}
+        <article
+            class="flex flex-col justify-between h-full min-h-[168px] min-w-0 p-4 sm:p-5 ds-layer-raised ds-r-16 ds-top3-card transition-all"
+            {% if running_task_id == task.id %}style="border-color: var(--ds-accent-primary);"{% endif %}
+        >
+            <div class="min-w-0">
+                <!-- Header do Card Top 3 -->
+                <div class="flex items-center justify-between gap-2 mb-2.5 min-w-0">
+                    <div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                        <span class="ds-badge ds-badge-urgent shrink-0">
+                            TOP #{{ forloop.counter }}
+                        </span>
+                        <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %} shrink-0">
+                            #{{ task.workspace.slug }}
+                        </span>
+                        {% if task.project %}
+                        <span class="text-[11px] ds-text-secondary font-medium truncate">
+                            {{ task.project.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span
+                            class="ds-badge ds-badge-urgent"
+                            title="Impacto {{ task.impact }} x Urgência {{ task.urgency }} = Score {{ task.priority_score }}"
+                        >
+                            P:{{ task.priority_score }}
+                        </span>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:toggle_top3' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="p-1 ds-btn-tactile ds-r-8 ds-urgent-text"
+                            title="Remover do Top 3 do Dia"
+                        >
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Título Clicável + Checkbox Tátil de Conclusão -->
+                <div class="flex items-start gap-2.5 mb-2.5 min-w-0">
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"status": "done"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="ds-checkbox mt-0.5 {% if task.status == 'done' %}is-checked{% endif %}"
+                        title="Concluir Tarefa"
+                    >
+                        <svg class="w-3.5 h-3.5 opacity-0 hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="text-left flex-1 min-w-0 group"
+                    >
+                        <h3 class="text-sm sm:text-base font-semibold ds-text-primary group-hover:ds-accent-text break-words line-clamp-2 leading-snug transition">
+                            {{ task.title }}
+                        </h3>
+                    </button>
+                </div>
+
+                <!-- Barra de Progresso Tátil (.ds-progress-track + .ds-progress-fill) de Subtarefas -->
+                {% if task.subtasks_total > 0 %}
+                <div class="mb-3 space-y-1">
+                    <div class="flex items-center justify-between text-[10px] font-mono ds-text-secondary">
+                        <span>Checklist</span>
+                        <span class="ds-text-primary">{{ task.subtasks_done }}/{{ task.subtasks_total }} concluídas ({{ task.subtasks_progress_pct }}%)</span>
+                    </div>
+                    <div class="ds-progress-track">
+                        <div
+                            class="ds-progress-fill"
+                            style="width: {{ task.subtasks_progress_pct }}%;"
+                        ></div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Metadados Compactos -->
+                <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-mono ds-text-secondary">
+                    <span class="ds-badge ds-badge-neutral">
+                        {{ task.get_shift_display }}
+                    </span>
+                    {% include "partials/assignee_chip_popover.html" %}
+                    {% if task.external_ref %}
+                    <span class="ds-badge ds-badge-neutral ds-text-primary truncate max-w-[180px]">
+                        {{ task.external_ref }}
+                    </span>
+                    {% endif %}
+                    {% if task.due_date %}
+                    <span class="ds-badge {% if task.due_date <= today %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                        {{ task.due_date|date:"d/m" }}
+                    </span>
+                    {% endif %}
+                    {% if task.total_logged_minutes > 0 %}
+                    <span class="ds-badge ds-badge-primary">
+                        &#9201; {{ task.total_logged_minutes }}m
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Rodapé de Ações Táteis com Flex-Wrap Anti-Estouro -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t" style="border-color: var(--ds-border-subtle);">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    {% if running_task_id == task.id %}
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:stop' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 ds-btn-primary ds-r-12 text-xs font-semibold whitespace-nowrap"
+                    >
+                        <span class="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                        <span>Pausar</span>
+                    </button>
+                    {% else %}
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:start' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 ds-btn-primary ds-r-12 text-xs font-semibold whitespace-nowrap"
+                    >
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span>Focar</span>
+                    </button>
+                    {% endif %}
+
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:add_manual' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"minutes": "15"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                        title="Adicionar +15 minutos manuais"
+                    >
+                        +15m
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-xs font-medium whitespace-nowrap"
+                        title="Abrir Gaveta de Detalhes, Subtarefas e Notas"
+                    >
+                        Detalhes
+                    </button>
+
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}"
+                        hx-vals='{"status": "done"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="p-1.5 ds-btn-tactile ds-r-8 ds-accent-text"
+                        title="Concluir Tarefa"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+
+        {% for slot_num in top_three_empty_slots %}
+        <!-- Slot vazio como Cavidade Física Entalhada (.ds-layer-inset) -->
+        <div class="flex flex-col items-center justify-center h-full min-h-[168px] p-4 sm:p-5 ds-layer-inset ds-r-16 text-center min-w-0">
+            <span class="inline-flex items-center justify-center w-9 h-9 ds-layer-raised ds-r-12 ds-urgent-text mb-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                </svg>
+            </span>
+            <span class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary mb-1">
+                CAVIDADE TOP #{{ slot_num }} DISPONÍVEL
+            </span>
+            <p class="text-xs ds-text-secondary max-w-[235px]">
+                Promova uma tarefa clicando em <span class="ds-urgent-text font-bold">★</span> na fila ou capture com <code class="ds-urgent-text font-mono">!top3</code> no <kbd class="px-1.5 py-0.5 ds-layer-raised ds-r-4 text-[10px]">Ctrl+K</kbd>.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+</section>

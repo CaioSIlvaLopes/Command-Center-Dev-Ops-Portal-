@@ -1,0 +1,10 @@
+﻿.venv/
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.env
+staticfiles/
+node_modules/
+whatsapp_relay/.wwebjs_auth/
+whatsapp_relay/.wwebjs_cache/

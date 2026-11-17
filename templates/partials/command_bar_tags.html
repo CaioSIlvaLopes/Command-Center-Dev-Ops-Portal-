@@ -1,0 +1,31 @@
+<span class="ds-text-secondary mr-1">Tags Táteis:</span>
+{% for ws in workspaces %}
+<button
+    type="button"
+    @click="appendToken('#{{ ws.slug }}')"
+    class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px] {% if ws.is_orange_accent %}ds-text-urgent{% else %}ds-text-accent{% endif %}"
+>
+    #{{ ws.slug }}
+</button>
+{% endfor %}
+<span class="ds-text-secondary">|</span>
+<button type="button" @click="appendToken('!top3')" class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px] ds-text-urgent">!top3</button>
+<button type="button" @click="appendToken('!hoje')" class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px] ds-text-urgent">!hoje</button>
+<span class="ds-text-secondary">|</span>
+<button type="button" @click="appendToken('/manha')" class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px]">/manha</button>
+<button type="button" @click="appendToken('/tarde')" class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px]">/tarde</button>
+<button type="button" @click="appendToken('/noite')" class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px]">/noite</button>
+{% if team_members %}
+<span class="ds-text-secondary">|</span>
+{% for member in team_members %}
+<button
+    type="button"
+    @click="appendToken('@{{ member.handle }}')"
+    class="px-2 py-0.5 ds-btn-tactile ds-r-pill text-[11px] {% if member.is_orange_accent %}ds-text-urgent{% else %}ds-text-accent{% endif %}"
+    title="{{ member.name }}{% if member.role %} ({{ member.role }}){% endif %}"
+>
+    @{{ member.handle }}
+</button>
+{% endfor %}
+{% endif %}
+

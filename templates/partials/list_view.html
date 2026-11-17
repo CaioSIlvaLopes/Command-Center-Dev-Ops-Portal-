@@ -1,0 +1,496 @@
+<section id="list-view-section" class="space-y-4 min-w-0">
+    <!-- A. Barra Superior de Controle Rápido de Ordem de Chegada (FIFO / LIFO), Filtros de Status e Busca -->
+    <div class="ds-layer-raised ds-r-16 p-3.5 sm:p-4 space-y-3.5 min-w-0">
+        <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <!-- Título + Contador de Tarefas na Fila -->
+            <div class="flex flex-wrap items-center gap-2.5 min-w-0">
+                <span class="inline-flex items-center justify-center w-8 h-8 ds-layer-inset ds-r-12 ds-accent-text shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </span>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-sm sm:text-base font-bold uppercase tracking-wider ds-text-primary">
+                            Fila Geral em Lista &bull; Ordem de Chegada
+                        </h2>
+                        <span class="ds-badge ds-badge-primary">
+                            {{ list_tasks|length }} listada{{ list_tasks|length|pluralize:"s" }}
+                        </span>
+                        <span class="ds-badge ds-badge-urgent">
+                            +{{ arrived_today_count|default:0 }} entraram hoje
+                        </span>
+                    </div>
+                    <p class="text-[11px] ds-text-secondary">
+                         Alterne entre <strong>Mais Recentes (LIFO)</strong> e <strong>Ordem de Chegada Estrita (Fila FIFO)</strong> ou clique nas colunas para ordenar
+                    </p>
+                </div>
+            </div>
+
+            <!-- 1. Seletor Rápido de Ordem de Chegada (Bandeja .ds-layer-inset ds-r-12 p-1) -->
+            <div class="overflow-x-auto no-scrollbar flex items-center gap-1.5 ds-layer-inset ds-r-12 p-1.5 shrink-0 max-w-full">
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort=arrival_desc&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition {% if list_sort == 'arrival_desc' or not list_sort %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                    title="Mostrar últimas tarefas que chegaram no topo (LIFO)"
+                >
+                    &#9889; Mais Recentes (Últimas Entradas)
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort=arrival_asc&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition {% if list_sort == 'arrival_asc' %}ds-layer-raised ds-urgent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                    title="Fila por Ordem de Chegada Estrita: tarefas mais antigas primeiro (FIFO)"
+                >
+                    &#9203; Ordem de Chegada (Fila FIFO - Mais Antigas 1&ordm;)
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort=score_desc&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-3 py-1.5 ds-r-8 text-xs font-mono transition {% if list_sort == 'score_desc' %}ds-layer-raised ds-accent-text font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                    title="Ordenar por Maior Priority Score (Impacto x Urgência)"
+                >
+                    &#128293; Maior Score (Prioridade)
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Filtro de Status em Pílulas + Busca Textual Rápida -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pt-2.5 border-t" style="border-color: var(--ds-border-subtle);">
+            <div class="overflow-x-auto no-scrollbar flex items-center gap-1.5 py-1 px-1 ds-layer-inset ds-r-12 max-w-full">
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=active&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'active' or not list_status_filter %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Ativas ({{ total_active_count }})
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=inbox&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'inbox' %}ds-btn-urgent font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Inbox ({{ inbox_count_for_ws|default:0 }})
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=todo&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'todo' %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    A Fazer ({{ todo_count_for_ws|default:0 }})
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=doing&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'doing' %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Em Execução ({{ doing_count_for_ws|default:0 }})
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=done&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'done' %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Concluídas ({{ total_done_count }})
+                </button>
+                <button
+                    type="button"
+                    hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter=all&q={{ list_search_query|urlencode }}"
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="shrink-0 whitespace-nowrap px-2.5 py-1 ds-r-8 text-[11px] font-mono transition {% if list_status_filter == 'all' %}ds-btn-primary font-bold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+                >
+                    Todas ({{ total_tasks_count }})
+                </button>
+            </div>
+
+            <!-- Campo de Busca Rápida na Lista -->
+            <form
+                hx-get="{% url 'tasks:dashboard' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="flex items-center gap-2 w-full md:w-72 shrink-0"
+            >
+                <input type="hidden" name="view" value="list" />
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                <input type="hidden" name="project" value="{{ current_project_id }}" />
+                <input type="hidden" name="sort" value="{{ list_sort }}" />
+                <input type="hidden" name="status_filter" value="{{ list_status_filter }}" />
+                <div class="relative flex-1 min-w-0">
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ list_search_query }}"
+                        placeholder="Filtrar por título, #frente ou @nome..."
+                        class="w-full ds-input ds-layer-inset ds-r-12 pl-3 pr-8 py-1.5 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                    />
+                    {% if list_search_query %}
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={{ list_sort }}&status_filter={{ list_status_filter }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        hx-push-url="true"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono ds-urgent-text hover:opacity-80"
+                        title="Limpar busca"
+                    >
+                        &times;
+                    </button>
+                    {% endif %}
+                </div>
+                <button
+                    type="submit"
+                    class="px-2.5 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono shrink-0"
+                >
+                    Buscar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- B. Cabeçalho de Tabela Tátil Clicável (Compact Table Header - Desktop lg+) -->
+    <div class="hidden lg:grid lg:grid-cols-12 gap-3 items-center ds-layer-raised ds-r-12 px-4 py-3 mb-3 text-[11px] font-mono font-bold uppercase tracking-wider ds-text-secondary">
+        <!-- Col 1: # / Chegada -->
+        <div class="col-span-2">
+            <button
+                type="button"
+                hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={% if list_sort == 'arrival_asc' %}arrival_desc{% else %}arrival_asc{% endif %}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="inline-flex items-center gap-1 hover:ds-text-primary transition {% if list_sort == 'arrival_desc' or list_sort == 'arrival_asc' %}ds-accent-text{% endif %}"
+                title="Alternar Ordem de Chegada (Mais Recentes vs Mais Antigas 1º)"
+            >
+                <span># / Chegada</span>
+                {% if list_sort == 'arrival_asc' %}
+                <span class="ds-urgent-text">&#9652; FIFO</span>
+                {% elif list_sort == 'arrival_desc' %}
+                <span class="ds-accent-text">&#9662; LIFO</span>
+                {% else %}
+                <span class="opacity-50">&#9662;</span>
+                {% endif %}
+            </button>
+        </div>
+
+        <!-- Col 2: Tarefa & Projeto -->
+        <div class="col-span-4">
+            <button
+                type="button"
+                hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={% if list_sort == 'title_asc' %}title_desc{% else %}title_asc{% endif %}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="inline-flex items-center gap-1 hover:ds-text-primary transition {% if list_sort == 'title_asc' or list_sort == 'title_desc' %}ds-accent-text{% endif %}"
+                title="Ordenar alfabeticamente por Título"
+            >
+                <span>Tarefa &amp; Projeto</span>
+                {% if list_sort == 'title_asc' %}
+                <span>&#9652;</span>
+                {% elif list_sort == 'title_desc' %}
+                <span>&#9662;</span>
+                {% endif %}
+            </button>
+        </div>
+
+        <!-- Col 3: Origem -->
+        <div class="col-span-1">
+            <span>Origem</span>
+        </div>
+
+        <!-- Col 4: Turno & Status -->
+        <div class="col-span-2">
+            <button
+                type="button"
+                hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort=status&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="inline-flex items-center gap-1 hover:ds-text-primary transition {% if list_sort == 'status' %}ds-accent-text{% endif %}"
+                title="Agrupar por Status"
+            >
+                <span>Turno &amp; Status</span>
+                {% if list_sort == 'status' %}
+                <span>&#9662;</span>
+                {% endif %}
+            </button>
+        </div>
+
+        <!-- Col 5: Responsável -->
+        <div class="col-span-1">
+            <span>Responsável</span>
+        </div>
+
+        <!-- Col 6: Score -->
+        <div class="col-span-1">
+            <button
+                type="button"
+                hx-get="{% url 'tasks:dashboard' %}?view=list&workspace={{ current_workspace_slug }}&project={{ current_project_id }}&sort={% if list_sort == 'score_desc' %}score_asc{% else %}score_desc{% endif %}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="inline-flex items-center gap-1 hover:ds-text-primary transition {% if list_sort == 'score_desc' or list_sort == 'score_asc' %}ds-accent-text{% endif %}"
+                title="Alternar Maior / Menor Score de Prioridade"
+            >
+                <span>Score</span>
+                {% if list_sort == 'score_desc' %}
+                <span>&#9662;</span>
+                {% elif list_sort == 'score_asc' %}
+                <span>&#9652;</span>
+                {% endif %}
+            </button>
+        </div>
+
+        <!-- Col 7: Ações -->
+        <div class="col-span-1 text-right">
+            <span>Ações</span>
+        </div>
+    </div>
+
+    <!-- C. Itens da Lista (LIST ITEMS - Desktop Grid 12 colunas + Mobile Card Compacto Empilhado) -->
+    <div class="space-y-2.5">
+        {% for task in list_tasks %}
+        <div
+            data-list-task-id="{{ task.id }}"
+            class="ds-layer-raised ds-r-16 p-3.5 sm:px-4 sm:py-3 transition {% if task.is_top_three %}ds-top3-card{% endif %} min-w-0"
+            {% if running_task_id == task.id %}style="border-color: var(--ds-accent-primary);"{% endif %}
+        >
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center min-w-0">
+                <!-- 1. # / Chegada (Posição na Fila + Data/Hora Exata + Tempo Relativo) -->
+                <div class="lg:col-span-2 flex items-center justify-between lg:justify-start gap-2 min-w-0">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="px-2 py-1 ds-layer-inset ds-r-8 text-xs font-mono font-bold {% if list_sort == 'arrival_asc' %}ds-urgent-text{% else %}ds-accent-text{% endif %} shrink-0">
+                            #{{ forloop.counter }}
+                        </span>
+                        <div class="min-w-0">
+                            <span class="block text-xs font-mono font-semibold ds-text-primary truncate">
+                                {{ task.created_at|date:"d/m H:i" }}
+                            </span>
+                            <span class="block text-[10px] font-mono ds-text-secondary truncate">
+                                há {{ task.created_at|timesince }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Badge de Origem visível no topo apenas no mobile (< lg) -->
+                    <div class="lg:hidden flex items-center gap-1.5 shrink-0">
+                        {% with orig=task.origin_badge %}
+                        <span class="ds-badge {% if orig.is_urgent %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}">
+                            {{ orig.label }}
+                        </span>
+                        {% endwith %}
+                    </div>
+                </div>
+
+                <!-- 2. Tarefa & Projeto (Checkbox Tátil + Título + Frente + Projeto + Subtarefas) -->
+                <div class="lg:col-span-4 flex items-start gap-2.5 min-w-0">
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                        hx-vals='{"status": "{% if task.status == "done" %}todo{% else %}done{% endif %}", "view": "list"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="ds-checkbox mt-0.5 shrink-0 {% if task.status == 'done' %}is-checked{% endif %}"
+                        title="{% if task.status == 'done' %}Reabrir Tarefa{% else %}Concluir Tarefa{% endif %}"
+                    >
+                        <svg class="w-3.5 h-3.5 {% if task.status != 'done' %}opacity-0 hover:opacity-100{% endif %} transition-opacity" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+
+                    <div class="min-w-0 flex-1 space-y-1">
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="text-left w-full group/title min-w-0"
+                        >
+                            <span class="block text-xs sm:text-sm font-semibold {% if task.status == 'done' %}line-through ds-text-secondary{% else %}ds-text-primary group-hover/title:ds-accent-text{% endif %} break-words leading-snug transition">
+                                {{ task.title }}
+                            </span>
+                        </button>
+
+                        <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                            <span class="ds-badge {% if task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                                #{{ task.workspace.slug }}
+                            </span>
+                            {% if task.project %}
+                            <span class="ds-text-secondary truncate max-w-[160px]">
+                                {{ task.project.name }}
+                            </span>
+                            {% endif %}
+                            {% if task.subtasks_total > 0 %}
+                            <span class="ds-badge ds-badge-neutral ds-text-primary" title="Subtarefas concluídas">
+                                &#9745; {{ task.subtasks_done }}/{{ task.subtasks_total }}
+                            </span>
+                            {% endif %}
+                            {% if task.total_logged_minutes > 0 %}
+                            <span class="ds-badge ds-badge-primary" title="Tempo registrado">
+                                &#9201; {{ task.total_logged_minutes }}m
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Origem (Desktop lg+) -->
+                <div class="hidden lg:flex lg:col-span-1 items-center min-w-0">
+                    {% with orig=task.origin_badge %}
+                    <span class="ds-badge {% if orig.is_urgent %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %} truncate">
+                        {{ orig.label }}
+                    </span>
+                    {% endwith %}
+                </div>
+
+                <!-- 4. Turno & Status (Seletores Rápidos HTMX) -->
+                <div class="lg:col-span-2 flex flex-wrap items-center gap-1.5 min-w-0">
+                    <select
+                        name="status"
+                        hx-post="{% url 'tasks:update_status' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="ds-input ds-layer-inset ds-r-8 px-2 py-1 text-[11px] font-mono ds-text-primary focus:outline-none"
+                        title="Alterar Status da Tarefa"
+                    >
+                        <option value="inbox" {% if task.status == 'inbox' %}selected{% endif %}>Inbox</option>
+                        <option value="todo" {% if task.status == 'todo' %}selected{% endif %}>Fila (A Fazer)</option>
+                        <option value="doing" {% if task.status == 'doing' %}selected{% endif %}>Em Execução</option>
+                        <option value="done" {% if task.status == 'done' %}selected{% endif %}>Concluída</option>
+                    </select>
+
+                    <select
+                        name="shift"
+                        hx-post="{% url 'tasks:update_shift' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="ds-input ds-layer-inset ds-r-8 px-2 py-1 text-[11px] font-mono ds-text-secondary focus:outline-none"
+                        title="Alterar Turno de Execução"
+                    >
+                        <option value="morning" {% if task.shift == 'morning' %}selected{% endif %}>Manhã</option>
+                        <option value="afternoon" {% if task.shift == 'afternoon' %}selected{% endif %}>Tarde</option>
+                        <option value="night" {% if task.shift == 'night' %}selected{% endif %}>Noite</option>
+                    </select>
+                </div>
+
+                <!-- 5. Responsável + 6. Score + 7. Ações (Alinhados em mobile e desktop) -->
+                <div class="lg:col-span-3 flex flex-wrap items-center justify-between lg:grid lg:grid-cols-3 gap-2 pt-2 lg:pt-0 border-t lg:border-t-0" style="border-color: var(--ds-border-subtle);">
+                    <!-- Col 5: Responsável (Popover 1-Click) -->
+                    <div class="flex items-center min-w-0">
+                        {% include "partials/assignee_chip_popover.html" %}
+                    </div>
+
+                    <!-- Col 6: Score + Estrela Top 3 -->
+                    <div class="flex items-center gap-1.5">
+                        <span class="ds-badge {% if task.priority_score >= 16 %}ds-badge-urgent{% else %}ds-badge-neutral{% endif %}" title="Impacto {{ task.impact }} x Urgência {{ task.urgency }}">
+                            P:{{ task.priority_score }}
+                        </span>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:toggle_top3' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="p-1 ds-btn-tactile ds-r-8 {% if task.is_top_three %}ds-urgent-text{% else %}ds-text-secondary hover:ds-urgent-text{% endif %}"
+                            title="{% if task.is_top_three %}Remover do Top 3{% else %}Promover ao Top 3{% endif %}"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Col 7: Ações (Play/Stop, +15m, Drawer) -->
+                    <div class="flex items-center justify-end gap-1.5">
+                        {% if running_task_id == task.id %}
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:stop' %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="p-1.5 ds-btn-primary ds-r-8"
+                            title="Pausar Cronômetro"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <rect x="5" y="5" width="10" height="10" rx="1"></rect>
+                            </svg>
+                        </button>
+                        {% else %}
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:start' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="p-1.5 ds-btn-tactile ds-r-8 ds-accent-text"
+                            title="Iniciar Cronômetro (Play)"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
+                            </svg>
+                        </button>
+                        {% endif %}
+
+                        <button
+                            type="button"
+                            hx-post="{% url 'timetracker:add_manual' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}&q={{ list_search_query|urlencode }}"
+                            hx-vals='{"minutes": "15", "view": "list"}'
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            title="Registrar +15m manuais"
+                        >
+                            +15m
+                        </button>
+
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:task_detail' task.id %}?workspace={{ current_workspace_slug }}&view=list&sort={{ list_sort }}&status_filter={{ list_status_filter }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono"
+                            title="Abrir Slide-Over Drawer de Detalhes"
+                        >
+                            Abrir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="ds-layer-inset ds-r-16 p-8 text-center space-y-2">
+            <p class="text-xs font-mono font-bold ds-text-primary uppercase">
+                Nenhuma tarefa encontrada para este filtro
+            </p>
+            <p class="text-xs ds-text-secondary">
+                Use a barra <kbd class="font-mono">Ctrl + K</kbd> no topo ou altere o filtro de status acima.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+

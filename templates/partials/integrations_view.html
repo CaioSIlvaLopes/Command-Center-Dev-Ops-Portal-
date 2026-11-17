@@ -1,0 +1,613 @@
+<section
+    id="integrations-view-section"
+    x-data="{
+        copiedKey: '',
+        copyText(text, key) {
+            navigator.clipboard.writeText(text);
+            this.copiedKey = key;
+            setTimeout(() => { if (this.copiedKey === key) this.copiedKey = ''; }, 2000);
+        }
+    }"
+    class="space-y-6"
+>
+    <!-- Cabeçalho da Central de Integrações & Logs -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <span class="inline-flex items-center justify-center w-7 h-7 ds-layer-raised ds-r-8 ds-accent-text shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </span>
+            <div class="min-w-0">
+                <h2 class="text-sm font-bold uppercase tracking-wider ds-text-primary">
+                    Integrações em Tempo Real &amp; Logs de Webhooks
+                </h2>
+                <p class="text-[11px] ds-text-secondary">
+                    Conectores de produção para GitHub Issues/PRs, WhatsApp Node.js Relay, Evolution API v2 e Shopee/ML
+                </p>
+            </div>
+        </div>
+
+        <!-- Botões Táteis HTMX para Testar Payloads Reais -->
+        <div class="flex flex-wrap items-center gap-2">
+            <button
+                type="button"
+                hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                hx-vals='{"source": "gemini_sync"}'
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="px-3 py-1.5 ds-btn-urgent ds-r-12 text-xs font-mono font-bold"
+            >
+                &#9889; Testar Sync Gemini Agora
+            </button>
+            <button
+                type="button"
+                hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                hx-vals='{"source": "evolution_real"}'
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="px-3 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-medium"
+            >
+                &#9889; Testar Payload Real (Evolution API)
+            </button>
+            <button
+                type="button"
+                hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                hx-vals='{"source": "github_open_real"}'
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-medium"
+            >
+                + Abrir PR #42 (GitHub)
+            </button>
+            <button
+                type="button"
+                hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                hx-vals='{"source": "github_close_real"}'
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-medium ds-urgent-text"
+            >
+                &#10003; Fechar/Merge PR #42 (GitHub)
+            </button>
+        </div>
+    </div>
+
+    <!-- Card em Destaque Fase 6: Ponte Dupla Gemini AI (Clipboard 1-Click & WhatsApp) -->
+    <div class="ds-layer-raised ds-r-24 ds-top3-card p-4 sm:p-6 space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-3.5" style="border-color: var(--ds-border-subtle);">
+            <div class="space-y-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="ds-badge ds-badge-urgent">&#9889; FASE 6 &bull; DUAL BRIDGE</span>
+                    <span class="ds-badge ds-badge-primary">POST {{ base_url }}/api/webhooks/gemini</span>
+                </div>
+                <h3 class="text-sm sm:text-base font-bold ds-text-primary">
+                    Ponte Dupla Gemini AI (Clipboard 1-Click &amp; WhatsApp Multi-linha)
+                </h3>
+                <p class="text-xs ds-text-secondary">
+                    Copie o resumo gerado pelo Gemini no navegador ou celular e clique em <strong class="ds-urgent-text">&#9889; Sync Gemini</strong> no topo (<kbd class="font-mono">Ctrl+Shift+V</kbd>) ou envie no seu WhatsApp começando com <code class="ds-urgent-text font-mono">/gemini</code>.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                    type="button"
+                    @click="copyText('{{ base_url }}/api/webhooks/gemini', 'gem_url')"
+                    class="px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono"
+                >
+                    <span x-text="copiedKey === 'gem_url' ? 'Endpoint Copiado!' : 'Copiar URL /webhooks/gemini'"></span>
+                </button>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:simulate_webhook' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                    hx-vals='{"source": "gemini_sync"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="px-3.5 py-1.5 ds-btn-urgent ds-r-12 text-xs font-mono font-bold"
+                >
+                    &#9889; Testar Sync Gemini Agora (3 Subtasks + 30m)
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Template 1: Bloco Multi-linha WhatsApp / Clipboard (/gemini) -->
+            <div class="ds-layer-inset ds-r-16 p-3.5 space-y-2 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-mono font-bold ds-urgent-text uppercase">
+                        Formato 1: Bloco Multi-linha (WhatsApp &amp; Botão Colar)
+                    </span>
+                    <button
+                        type="button"
+                        @click="copyText(`/gemini Refatorar módulo de relatórios #saas !top3 @caio /manha\nProjeto: Deskify\nTempo: 45m\n- [x] Ajustar contraste dos cards dark mode\n- [ ] Padronizar colunas da tabela de materiais\n- [ ] Validar exportação no dashboard técnico\nNotas: Alinhado no chat com o Gemini para usar tokens semânticos.`, 'gem_tpl_b')"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono shrink-0"
+                    >
+                        <span x-text="copiedKey === 'gem_tpl_b' ? 'Copiado!' : 'Copiar Bloco'"></span>
+                    </button>
+                </div>
+                <pre class="text-[11px] font-mono ds-text-primary overflow-x-auto leading-relaxed">/gemini Refatorar módulo de relatórios #saas !top3 @caio /manha
+Projeto: Deskify
+Tempo: 45m
+- [x] Ajustar contraste dos cards dark mode
+- [ ] Padronizar colunas da tabela de materiais
+- [ ] Validar exportação no dashboard técnico
+Notas: Alinhado no chat com o Gemini para usar tokens semânticos.</pre>
+            </div>
+
+            <!-- Template 2: JSON Estruturado do Gemini -->
+            <div class="ds-layer-inset ds-r-16 p-3.5 space-y-2 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-mono font-bold ds-accent-text uppercase">
+                        Formato 2: JSON Estruturado (API &amp; Clipboard 1-Click)
+                    </span>
+                    <button
+                        type="button"
+                        @click="copyText(JSON.stringify({action:'upsert',title:'Otimizar checkout no Portal MS CREW',workspace:'wsa',project:'Portal MS CREW',assignee:'henrique',shift:'morning',is_top_three:true,minutes_spent:30,notes:'Resumo técnico gerado no Gemini',subtasks:['[x] Validar credenciais','Homologar webhook PIX']}, null, 2), 'gem_tpl_a')"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono shrink-0"
+                    >
+                        <span x-text="copiedKey === 'gem_tpl_a' ? 'Copiado!' : 'Copiar JSON'"></span>
+                    </button>
+                </div>
+                <pre class="text-[11px] font-mono ds-text-primary overflow-x-auto leading-relaxed">{
+  "action": "upsert",
+  "title": "Otimizar checkout no Portal MS CREW",
+  "workspace": "wsa",
+  "project": "Portal MS CREW",
+  "assignee": "henrique",
+  "minutes_spent": 30,
+  "subtasks": ["[x] Validar credenciais", "Homologar webhook PIX"],
+  "notes": "Resumo técnico gerado na conversa com o Gemini..."
+}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Fase 7: Motor de Voz & Travas de Segurança Gemini (Free Tier) -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-3.5" style="border-color: var(--ds-border-subtle);">
+            <div class="space-y-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="ds-badge ds-badge-primary">&#127911; FASE 7 &bull; VOICE &amp; SAFETY LOCKS</span>
+                    <span class="ds-badge {% if audio_quota.ai_audio_enabled %}ds-badge-primary{% else %}ds-badge-urgent{% endif %}">
+                        {% if audio_quota.ai_audio_enabled %}Motor IA: Ativo{% else %}Kill-Switch: Pausado{% endif %}
+                    </span>
+                </div>
+                <h3 class="text-sm sm:text-base font-bold ds-text-primary">
+                    Motor de Voz &amp; Travas de Segurança Gemini (Free Tier)
+                </h3>
+                <p class="text-xs ds-text-secondary">
+                    Ditado Nativo (<kbd class="font-mono">&#127897;&#65039; Ditado</kbd>) 100% gratuito e ilimitado no navegador + Processamento de Áudio IA protegido por 3 Travas Rígidas (Quote Explícito, Máx 3.5MB e Disjuntor Diário).
+                </p>
+            </div>
+
+            <!-- Kill-Switch Tátil 1-Click -->
+            <div class="flex items-center gap-3 px-4 py-2.5 ds-layer-inset ds-r-16 shrink-0">
+                <div class="text-right">
+                    <span class="block text-[10px] font-mono uppercase ds-text-secondary">Kill-Switch Geral</span>
+                    <span class="text-xs font-mono font-bold {% if audio_quota.ai_audio_enabled %}ds-accent-text{% else %}ds-urgent-text{% endif %}">
+                        {% if audio_quota.ai_audio_enabled %}Ativar / Pausar Áudio IA (Ativo){% else %}Ativar / Pausar Áudio IA (Pausado){% endif %}
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    hx-post="{% url 'tasks:audio_quota_save' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                    hx-vals='{"toggle_killswitch": "1", "view": "integrations"}'
+                    hx-target="#dashboard-content"
+                    hx-swap="innerHTML"
+                    class="ds-switch {% if audio_quota.ai_audio_enabled %}is-on{% endif %}"
+                    title="Alternar Kill-Switch de Processamento de Áudio IA"
+                >
+                    <span class="ds-switch-thumb"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            <!-- Coluna 1: Medidor de Cota Diária + Regra de Quote Explícito no WhatsApp -->
+            <div class="space-y-3.5">
+                <div class="ds-layer-inset ds-r-16 p-4 space-y-2.5">
+                    <div class="flex items-center justify-between text-xs font-mono">
+                        <span class="ds-text-primary font-bold uppercase">Consumo do Disjuntor Diário</span>
+                        <span class="{% if audio_quota.is_quota_exceeded %}ds-urgent-text{% else %}ds-accent-text{% endif %} font-bold">
+                            {{ audio_quota.used_today|default:0 }} de {{ audio_quota.max_daily|default:20 }} áudios utilizados hoje
+                        </span>
+                    </div>
+                    <div class="ds-progress-track">
+                        <div
+                            class="ds-progress-fill"
+                            style="width: {{ audio_quota.quota_pct|default:0 }}%;"
+                        ></div>
+                    </div>
+                    <p class="text-[11px] font-mono ds-text-secondary">
+                        Restam <strong class="ds-text-primary">{{ audio_quota.remaining_today|default:20 }}</strong> requisições de áudio hoje. Ao atingir o limite, chamadas externas são bloqueadas automaticamente.
+                    </p>
+                </div>
+
+                <!-- Explicação Visual da Trava 1 (Quote Explícito no WhatsApp) -->
+                <div class="ds-layer-inset ds-r-16 p-4 space-y-1.5">
+                    <span class="block text-xs font-mono font-bold ds-urgent-text uppercase">
+                        &#128274; Regra de Segurança do WhatsApp (Anti-Loop)
+                    </span>
+                    <p class="text-xs ds-text-primary leading-relaxed">
+                        Para transformar um áudio do WhatsApp em tarefa, <strong>responda (quote)</strong> ao áudio com <code class="ds-urgent-text font-mono">/task</code> ou <code class="ds-urgent-text font-mono">!cc</code> (ex: <code class="ds-accent-text font-mono">!cc #wsa @pedro !hoje</code>).
+                    </p>
+                    <p class="text-[11px] ds-text-secondary">
+                        Áudios normais enviados ou recebidos na conversa sem resposta explícita são <strong>100% ignorados</strong> e jamais consomem sua cota.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Coluna 2: Formulário de Chave Gemini Free Tier e Limite Diário -->
+            <form
+                hx-post="{% url 'tasks:audio_quota_save' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="ds-layer-inset ds-r-16 p-4 space-y-3.5"
+            >
+                <input type="hidden" name="view" value="integrations" />
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
+                <input type="hidden" name="ai_audio_enabled" value="{% if audio_quota.ai_audio_enabled %}1{% else %}0{% endif %}" />
+
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-mono font-bold uppercase ds-accent-text">
+                        Configurar Chave &amp; Limite Diário
+                    </span>
+                    <span class="text-[10px] font-mono ds-text-secondary">
+                        {% if audio_quota.has_api_key %}&#10003; Chave Configurada{% else %}Modo Fallback Local (Sem Chave){% endif %}
+                    </span>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                        GEMINI_API_KEY (Google AI Studio &mdash; Free Tier)
+                    </label>
+                    <input
+                        type="password"
+                        name="gemini_api_key"
+                        value="{{ integration_config.gemini_api_key }}"
+                        placeholder="Cole sua chave AIzaSy... (Opcional para modo local)"
+                        class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                        Limite Diário Máximo de Áudios (max_daily_audio_requests)
+                    </label>
+                    <input
+                        type="number"
+                        name="max_daily_audio_requests"
+                        min="1"
+                        max="500"
+                        value="{{ audio_quota.max_daily|default:20 }}"
+                        required
+                        class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                    />
+                </div>
+
+                <!-- Phase 7.1: Conexão Evolution API v2 (getBase64FromMediaMessage para Áudios Citados) -->
+                <div class="pt-2.5 border-t space-y-2.5" style="border-color: var(--ds-border-subtle);">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-mono font-bold uppercase ds-urgent-text">
+                            Evolution API v2 &bull; Busca de Áudio Citado (getBase64FromMediaMessage)
+                        </span>
+                        <span class="text-[10px] font-mono ds-text-secondary">
+                            {% if integration_config.evolution_api_key %}&#10003; API Key Ativa{% else %}Opcional{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                                Evolution API URL
+                            </label>
+                            <input
+                                type="text"
+                                name="evolution_api_url"
+                                value="{{ integration_config.evolution_api_url|default:'http://127.0.0.1:8080' }}"
+                                placeholder="http://127.0.0.1:8080"
+                                class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                                Evolution Instance Name
+                            </label>
+                            <input
+                                type="text"
+                                name="evolution_instance_name"
+                                value="{{ integration_config.evolution_instance_name }}"
+                                placeholder="ex: wsa-instance"
+                                class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Evolution API Key (apikey)
+                        </label>
+                        <input
+                            type="password"
+                            name="evolution_api_key"
+                            value="{{ integration_config.evolution_api_key }}"
+                            placeholder="Token da instância Evolution API v2..."
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button
+                        type="submit"
+                        class="px-4 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"
+                    >
+                        Salvar Travas &amp; Cota Diária
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 1. Cards Táteis de Endpoints Prontos para Copiar (Cavidade .ds-layer-inset + Botão Copiar shrink-0) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <!-- Card GitHub -->
+        <div class="ds-layer-raised ds-r-16 p-4 flex flex-col justify-between space-y-3 min-w-0">
+            <div class="min-w-0">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-mono font-bold uppercase ds-text-primary truncate">GitHub Webhook</span>
+                    <span class="ds-badge ds-badge-primary shrink-0">POST</span>
+                </div>
+                <p class="text-[11px] ds-text-secondary mb-2.5">
+                    Eventos: <code class="ds-text-primary">issues</code>, <code class="ds-text-primary">pull_request</code>, <code class="ds-text-primary">ping</code>
+                </p>
+            </div>
+            <div class="flex items-center gap-2 p-1.5 ds-layer-inset ds-r-12 min-w-0">
+                <span class="truncate font-mono text-xs flex-1 min-w-0 px-1.5 ds-accent-text" title="{{ base_url }}/api/webhooks/github">
+                    {{ base_url }}/api/webhooks/github
+                </span>
+                <button
+                    type="button"
+                    @click="copyText('{{ base_url }}/api/webhooks/github', 'gh')"
+                    class="shrink-0 px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                >
+                    <span x-text="copiedKey === 'gh' ? 'Copiado!' : 'Copiar'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Node.js WhatsApp -->
+        <div class="ds-layer-raised ds-r-16 p-4 flex flex-col justify-between space-y-3 min-w-0">
+            <div class="min-w-0">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-mono font-bold uppercase ds-accent-text truncate">Node.js WhatsApp Relay</span>
+                    <span class="ds-badge ds-badge-primary shrink-0">POST</span>
+                </div>
+                <p class="text-[11px] ds-text-secondary mb-2.5">
+                    Conector <code class="ds-text-primary">whatsapp_relay/index.js</code>
+                </p>
+            </div>
+            <div class="flex items-center gap-2 p-1.5 ds-layer-inset ds-r-12 min-w-0">
+                <span class="truncate font-mono text-xs flex-1 min-w-0 px-1.5 ds-accent-text" title="{{ base_url }}/api/webhooks/whatsapp">
+                    {{ base_url }}/api/webhooks/whatsapp
+                </span>
+                <button
+                    type="button"
+                    @click="copyText('{{ base_url }}/api/webhooks/whatsapp', 'wa')"
+                    class="shrink-0 px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                >
+                    <span x-text="copiedKey === 'wa' ? 'Copiado!' : 'Copiar'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Evolution API v2 -->
+        <div class="ds-layer-raised ds-r-16 p-4 flex flex-col justify-between space-y-3 min-w-0">
+            <div class="min-w-0">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-mono font-bold uppercase ds-accent-text truncate">Evolution API v2</span>
+                    <span class="ds-badge ds-badge-primary shrink-0">POST</span>
+                </div>
+                <p class="text-[11px] ds-text-secondary mb-2.5">
+                    Evento nativo <code class="ds-text-primary">messages.upsert</code> (<code class="ds-urgent-text">/task</code> ou <code class="ds-urgent-text">!cc</code>)
+                </p>
+            </div>
+            <div class="flex items-center gap-2 p-1.5 ds-layer-inset ds-r-12 min-w-0">
+                <span class="truncate font-mono text-xs flex-1 min-w-0 px-1.5 ds-accent-text" title="{{ base_url }}/api/webhooks/whatsapp/evolution">
+                    {{ base_url }}/api/webhooks/whatsapp/evolution
+                </span>
+                <button
+                    type="button"
+                    @click="copyText('{{ base_url }}/api/webhooks/whatsapp/evolution', 'evo')"
+                    class="shrink-0 px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                >
+                    <span x-text="copiedKey === 'evo' ? 'Copiado!' : 'Copiar'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card E-commerce -->
+        <div class="ds-layer-raised ds-r-16 ds-top3-card p-4 flex flex-col justify-between space-y-3 min-w-0">
+            <div class="min-w-0">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-mono font-bold uppercase ds-urgent-text truncate">Alertas E-commerce</span>
+                    <span class="ds-badge ds-badge-urgent shrink-0">POST</span>
+                </div>
+                <p class="text-[11px] ds-text-secondary mb-2.5">
+                    Shopee &amp; Mercado Livre (Ruptura / Anúncios)
+                </p>
+            </div>
+            <div class="flex items-center gap-2 p-1.5 ds-layer-inset ds-r-12 min-w-0">
+                <span class="truncate font-mono text-xs flex-1 min-w-0 px-1.5 ds-urgent-text" title="{{ base_url }}/api/webhooks/ecommerce">
+                    {{ base_url }}/api/webhooks/ecommerce
+                </span>
+                <button
+                    type="button"
+                    @click="copyText('{{ base_url }}/api/webhooks/ecommerce', 'ec')"
+                    class="shrink-0 px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                >
+                    <span x-text="copiedKey === 'ec' ? 'Copiado!' : 'Copiar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Guia Rápido de Comandos WhatsApp & Mapeamento GitHub -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Guia de Comandos no Celular -->
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-3 min-w-0">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5" style="border-color: var(--ds-border-subtle);">
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Guia Rápido de Comandos no WhatsApp
+                </h3>
+                <span class="ds-badge ds-badge-primary">
+                    Gatilhos: /task ou !cc
+                </span>
+            </div>
+            <p class="text-xs ds-text-secondary">
+                Envie para o seu próprio número no WhatsApp. Mensagens com <code class="ds-urgent-text font-mono">!top3</code> ou <code class="ds-urgent-text font-mono">!hoje</code> entram direto em <strong>A Fazer</strong>; as demais entram na <strong>Inbox</strong>:
+            </p>
+            <div class="space-y-2 font-mono text-xs">
+                <div class="p-2.5 ds-layer-inset ds-r-12 ds-text-primary break-words">
+                    <span class="ds-accent-text">/task</span> Ajustar campanha #wsa <span class="ds-urgent-text">!top3</span> @pedro /tarde
+                </div>
+                <div class="p-2.5 ds-layer-inset ds-r-12 ds-text-primary break-words">
+                    <span class="ds-accent-text">!cc</span> Revisar estoque Cadeira Ergonômica <span class="ds-urgent-text">#ecom !hoje</span> @monica
+                </div>
+                <div class="p-2.5 ds-layer-inset ds-r-12 ds-text-primary break-words">
+                    <span class="ds-accent-text">/task</span> Corrigir SLA multi-tenant no Deskify #saas @pedro /manha
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapeamento Automático de Repositórios GitHub -->
+        <div class="ds-layer-raised ds-r-16 p-4 space-y-3 min-w-0">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5" style="border-color: var(--ds-border-subtle);">
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Mapeamento de Repositórios GitHub &rarr; Projetos
+                </h3>
+                <span class="text-[10px] font-mono ds-text-secondary">Auto-Sync Issues &amp; PRs</span>
+            </div>
+            <p class="text-xs ds-text-secondary">
+                Quando um PR ou Issue é fechado/merged no GitHub, a Task correspondente é concluída e qualquer <code class="ds-accent-text font-mono">TimeLog</code> ativo é pausado automaticamente:
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {% for proj in all_projects %}
+                <div class="flex items-center justify-between gap-2 px-3 py-2 ds-layer-inset ds-r-12 text-xs font-mono min-w-0">
+                    <span class="ds-text-primary font-semibold truncate">{{ proj.name }}</span>
+                    <span class="{% if proj.github_repo_name %}ds-accent-text{% else %}ds-text-secondary{% endif %} truncate">
+                        {{ proj.github_repo_name|default:"(Loja E-com)" }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Tabela / Lista em Tempo Real dos Últimos 20 WebhookEvents -->
+    <div class="ds-layer-raised ds-r-16 p-4 space-y-3.5 min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-1">
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider ds-text-primary">
+                    Auditoria em Tempo Real &mdash; Últimos 20 Eventos de Webhook
+                </h3>
+                <p class="text-[11px] ds-text-secondary">
+                    Inspecione o payload JSON bruto, abra a tarefa vinculada ou reprocesse eventos com 1 clique
+                </p>
+            </div>
+            <span class="ds-badge ds-badge-primary">
+                {{ recent_webhooks|length }} eventos
+            </span>
+        </div>
+
+        <!-- Compact Table Header (.ds-layer-raised .ds-r-12) -->
+        <div class="hidden lg:grid lg:grid-cols-12 gap-2 px-3.5 py-2 ds-layer-raised ds-r-12 text-[10px] font-mono font-bold uppercase tracking-wider ds-text-secondary">
+            <div class="col-span-3">Origem / Evento</div>
+            <div class="col-span-2">Data / Hora</div>
+            <div class="col-span-4">Tarefa Vinculada</div>
+            <div class="col-span-3 text-right">Ações Táteis</div>
+        </div>
+
+        <div class="space-y-2.5">
+            {% for wh in recent_webhooks %}
+            <div x-data="{ showPayload: false }" class="ds-layer-inset ds-r-16 p-3.5 space-y-2.5 min-w-0">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+                    <div class="flex flex-wrap items-center gap-2 min-w-0">
+                        <span class="ds-badge {% if wh.source == 'ecommerce' %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                            {{ wh.source }}
+                        </span>
+                        {% if wh.event_type %}
+                        <span class="ds-badge ds-badge-neutral ds-text-primary">
+                            {{ wh.event_type }}
+                        </span>
+                        {% endif %}
+                        <span class="text-[11px] font-mono ds-text-secondary">
+                            {{ wh.created_at|date:"d/m/Y H:i:s" }}
+                        </span>
+
+                        {% if wh.created_task %}
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:task_detail' wh.created_task.id %}?workspace={{ current_workspace_slug }}&view=integrations"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="text-xs font-medium ds-accent-text hover:underline truncate max-w-full sm:max-w-[340px]"
+                            title="Abrir Slide-Over da Tarefa"
+                        >
+                            &rarr; {{ wh.created_task.title }} ({{ wh.created_task.get_status_display }})
+                        </button>
+                        {% endif %}
+                    </div>
+
+                    <!-- Botões de Ação com flex-wrap gap-2 no mobile -->
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        {% if wh.created_task %}
+                        <button
+                            type="button"
+                            hx-get="{% url 'tasks:task_detail' wh.created_task.id %}?workspace={{ current_workspace_slug }}&view=integrations"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                        >
+                            Abrir Task
+                        </button>
+                        {% endif %}
+
+                        <button
+                            type="button"
+                            @click="showPayload = !showPayload"
+                            class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono"
+                        >
+                            <span x-text="showPayload ? 'Ocultar JSON' : 'Ver JSON'"></span>
+                        </button>
+
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:reprocess_webhook' wh.id %}?workspace={{ current_workspace_slug }}&view=integrations"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-primary ds-r-8 text-[11px] font-mono"
+                            title="Reprocessar este evento"
+                        >
+                            &#8635; Reprocessar
+                        </button>
+                    </div>
+                </div>
+
+                {% if wh.error_message %}
+                <div class="px-3 py-1.5 ds-layer-raised ds-r-8 text-[11px] font-mono ds-urgent-text break-words">
+                    Erro: {{ wh.error_message }}
+                </div>
+                {% endif %}
+
+                <div x-show="showPayload" x-cloak class="pt-2 border-t" style="border-color: var(--ds-border-subtle);">
+                    <pre class="p-3 ds-layer-raised ds-r-12 text-[11px] font-mono ds-text-secondary overflow-x-auto max-w-full">{{ wh.payload }}</pre>
+                </div>
+            </div>
+            {% empty %}
+            <div class="ds-layer-inset ds-r-16 p-6 text-center text-xs font-mono ds-text-secondary">
+                Nenhum evento de webhook registrado até o momento.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

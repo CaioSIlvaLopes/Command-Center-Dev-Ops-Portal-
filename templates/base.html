@@ -1,0 +1,753 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="tactile-dark" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Command Center &mdash; Dev &amp; Ops Portal{% endblock %}</title>
+
+    <!-- Inicialização Imediata do Tema Tátil via localStorage (sem FOUC) -->
+    <script>
+        (function() {
+            try {
+                var savedTheme = localStorage.getItem('cc_theme') || 'tactile-dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } catch (e) {}
+        })();
+    </script>
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cc: {
+                            bg: '#0f172a',
+                            surface: '#1e293b',
+                            border: '#334155',
+                            neutral: '#475569',
+                            text: '#f8fafc',
+                            muted: '#94a3b8',
+                            blue: '#3b82f6',
+                            orange: '#f97316',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Folha de Estilos Central do Tactile / Soft-Neumorphic Design System -->
+    <link rel="stylesheet" href="{% static 'css/tactile-ds.css' %}">
+
+    <!-- HTMX, SortableJS & Alpine.js -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--ds-bg-base, #0f172a); }
+        ::-webkit-scrollbar-thumb { background: var(--ds-border-subtle, #334155); border-radius: 3px; }
+        .sortable-ghost { opacity: 0.35; border: 2px dashed var(--ds-accent-primary, #3b82f6) !important; }
+        .sortable-drag { cursor: grabbing !important; }
+    </style>
+</head>
+<body
+    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+    x-data="{
+        cmdPaletteOpen: false,
+        cmdText: '',
+        sidebarOpen: false,
+        geminiModalOpen: false,
+        geminiFallbackText: '',
+        geminiTemplateCopied: false,
+        isDictating: false,
+        audioModalOpen: false,
+        isRecordingAudio: false,
+        recordingSeconds: 0,
+        recordingTimer: null,
+        mediaRecorder: null,
+        audioChunks: [],
+        recordedBase64: '',
+        recordedMimeType: 'audio/webm',
+        audioExtraHint: '',
+        theme: localStorage.getItem('cc_theme') || 'tactile-dark',
+        toggleTheme() {
+            this.theme = this.theme === 'tactile-dark' ? 'tactile-sand' : 'tactile-dark';
+            localStorage.setItem('cc_theme', this.theme);
+            document.documentElement.setAttribute('data-theme', this.theme);
+        },
+        setTheme(newTheme) {
+            this.theme = newTheme;
+            localStorage.setItem('cc_theme', this.theme);
+            document.documentElement.setAttribute('data-theme', this.theme);
+        },
+        appendToken(token) {
+            const trimmed = this.cmdText.trim();
+            this.cmdText = trimmed ? `${trimmed} ${token} ` : `${token} `;
+            this.$nextTick(() => {
+                const el = document.getElementById('command-bar-input');
+                if (el) el.focus();
+            });
+        },
+        copyGeminiTemplate() {
+            const tpl = `/gemini Refatorar módulo de relatórios #saas !top3 @caio /manha\nProjeto: Deskify\nTempo: 45m\n- [x] Ajustar contraste dos cards dark mode\n- [ ] Padronizar colunas da tabela de materiais\n- [ ] Validar exportação no dashboard técnico\nNotas: Alinhado no chat com o Gemini para usar tokens semânticos.`;
+            navigator.clipboard.writeText(tpl);
+            this.geminiFallbackText = tpl;
+            this.geminiTemplateCopied = true;
+            setTimeout(() => { this.geminiTemplateCopied = false; }, 2200);
+        },
+        async pasteGeminiSync() {
+            try {
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    throw new Error('Clipboard API indisponível');
+                }
+                const text = (await navigator.clipboard.readText() || '').trim();
+                if (!text) {
+                    this.geminiModalOpen = true;
+                    return;
+                }
+                const wsInput = document.getElementById('command-bar-workspace-input');
+                const workspace = wsInput ? wsInput.value : 'all';
+                const csrfMeta = document.body.getAttribute('hx-headers');
+                let csrfToken = '';
+                try {
+                    if (csrfMeta) csrfToken = JSON.parse(csrfMeta)['X-CSRFToken'] || '';
+                } catch (err) {}
+
+                htmx.ajax('POST', '/tasks/gemini-paste/', {
+                    target: '#dashboard-content',
+                    swap: 'innerHTML',
+                    values: { clipboard_text: text, workspace: workspace },
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+            } catch (err) {
+                this.geminiModalOpen = true;
+                this.$nextTick(() => {
+                    const ta = document.getElementById('gemini-fallback-textarea');
+                    if (ta) ta.focus();
+                });
+            }
+        },
+        startNativeDictation() {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                alert('Seu navegador não suporta a Web Speech API nativa. Use o Chrome ou Edge.');
+                return;
+            }
+            if (this.isDictating && this._recInstance) {
+                this._recInstance.stop();
+                this.isDictating = false;
+                return;
+            }
+            const rec = new SpeechRec();
+            this._recInstance = rec;
+            rec.lang = 'pt-BR';
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+            this.isDictating = true;
+
+            let finalSpoken = '';
+            rec.onresult = (event) => {
+                let interim = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalSpoken += event.results[i][0].transcript;
+                    } else {
+                        interim += event.results[i][0].transcript;
+                    }
+                }
+                this.cmdText = (finalSpoken || interim).trim();
+            };
+            rec.onerror = () => {
+                this.isDictating = false;
+            };
+            rec.onend = () => {
+                this.isDictating = false;
+                const spoken = (this.cmdText || finalSpoken || '').trim();
+                if (!spoken) return;
+                const wsInput = document.getElementById('command-bar-workspace-input');
+                const workspace = wsInput ? wsInput.value : 'all';
+                const csrfMeta = document.body.getAttribute('hx-headers');
+                let csrfToken = '';
+                try {
+                    if (csrfMeta) csrfToken = JSON.parse(csrfMeta)['X-CSRFToken'] || '';
+                } catch (err) {}
+
+                htmx.ajax('POST', '/tasks/voice-dictation/', {
+                    target: '#dashboard-content',
+                    swap: 'innerHTML',
+                    values: { spoken_text: spoken, workspace: workspace },
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                this.cmdText = '';
+            };
+            rec.start();
+        },
+        async toggleAudioRecording() {
+            if (this.isRecordingAudio) {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+                this.isRecordingAudio = false;
+                if (this.recordingTimer) clearInterval(this.recordingTimer);
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.audioChunks = [];
+                this.recordedBase64 = '';
+                this.recordingSeconds = 0;
+                const mr = new MediaRecorder(stream);
+                this.mediaRecorder = mr;
+                this.recordedMimeType = mr.mimeType || 'audio/webm';
+
+                mr.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) this.audioChunks.push(e.data);
+                };
+                mr.onstop = () => {
+                    stream.getTracks().forEach((t) => t.stop());
+                    const blob = new Blob(this.audioChunks, { type: this.recordedMimeType });
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        this.recordedBase64 = reader.result || '';
+                    };
+                    reader.readAsDataURL(blob);
+                };
+
+                mr.start();
+                this.isRecordingAudio = true;
+                this.recordingTimer = setInterval(() => {
+                    this.recordingSeconds += 1;
+                    // Trava automática de 120 segundos no frontend
+                    if (this.recordingSeconds >= 120) {
+                        this.toggleAudioRecording();
+                    }
+                }, 1000);
+            } catch (err) {
+                alert('Permissão de microfone negada ou indisponível. Você também pode enviar um arquivo de áudio abaixo.');
+            }
+        },
+        handleGlobalKeydown(e) {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'v') {
+                e.preventDefault();
+                this.pasteGeminiSync();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                this.cmdPaletteOpen = true;
+                this.$nextTick(() => {
+                    const input = document.getElementById('command-bar-input');
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
+                });
+            } else if (e.altKey && ['0', '1', '2', '3', '4', '5'].includes(e.key)) {
+                e.preventDefault();
+                const btnId = e.key === '0' ? 'ws-pill-all' : `ws-pill-${e.key}`;
+                const btn = document.getElementById(btnId);
+                if (btn) btn.click();
+            } else if (e.key === 'Escape') {
+                this.cmdPaletteOpen = false;
+                this.sidebarOpen = false;
+                this.geminiModalOpen = false;
+                const drawer = document.getElementById('task-drawer-container');
+                if (drawer) drawer.innerHTML = '';
+            }
+        }
+    }"
+    @keydown.window="handleGlobalKeydown($event)"
+    class="ds-app-body bg-[#0f172a] text-[#f8fafc] antialiased selection:bg-[#3b82f6] selection:text-white min-h-screen flex flex-col lg:flex-row lg:h-screen lg:overflow-hidden overflow-x-hidden max-w-[100vw]"
+>
+    <!-- BACKDROP MOBILE DO DRAWER OFF-CANVAS -->
+    <div
+        x-show="sidebarOpen"
+        x-cloak
+        x-transition.opacity
+        @click="sidebarOpen = false"
+        class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+    ></div>
+
+    <!-- SIDEBAR MOBILE OFF-CANVAS (lg:hidden) -->
+    <aside
+        id="sidebar-mobile-container"
+        x-show="sidebarOpen"
+        x-cloak
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="-translate-x-full"
+        x-transition:enter-end="translate-x-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="translate-x-0"
+        x-transition:leave-end="-translate-x-full"
+        class="fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] ds-layer-modal flex flex-col justify-between overflow-y-auto lg:hidden"
+    >
+        {% include "partials/sidebar_content.html" %}
+    </aside>
+
+    <!-- SIDEBAR DESKTOP FIXA (lg:flex lg:w-64 lg:flex-col lg:shrink-0) -->
+    <aside
+        id="sidebar-desktop-container"
+        class="hidden lg:flex lg:w-64 lg:flex-col lg:shrink-0 lg:justify-between border-r border-[#334155] ds-layer-base overflow-y-auto"
+    >
+        {% include "partials/sidebar_content.html" %}
+    </aside>
+
+    <!-- ÁREA PRINCIPAL (App Shell Main) -->
+    <main class="flex-1 flex flex-col min-w-0 max-w-full lg:h-screen lg:overflow-hidden">
+        <!-- HEADER PRINCIPAL RESPONSIVO (Linha 1 Mobile: Menu+Logo e Timer+Tema | Linha 2 Mobile / Centro Desktop: Ctrl+K) -->
+        <header class="shrink-0 border-b border-[#334155] ds-layer-base z-20 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5 p-3 sm:px-6">
+            <!-- Esquerda: Botão Hambúrguer + Identidade Compacta Mobile -->
+            <div class="flex items-center gap-2 shrink-0 lg:hidden">
+                <button
+                    type="button"
+                    @click="sidebarOpen = true"
+                    class="p-2 ds-btn-tactile ds-r-12"
+                    title="Abrir Menu"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <div class="flex items-center gap-1.5">
+                    <span class="inline-flex items-center justify-center w-7 h-7 ds-btn-primary ds-r-8 font-mono text-xs font-bold">
+                        CC
+                    </span>
+                    <span class="text-xs font-bold tracking-tight ds-text-primary hidden xs:inline sm:inline">
+                        Command Center
+                    </span>
+                </div>
+            </div>
+
+            <!-- Centro (Desktop) / Linha 2 Própria 100% Legível (Mobile): Barra de Comando (Ctrl + K) -->
+            <form
+                hx-post="{% url 'tasks:command_create' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                @htmx:after-request="if($event.detail.successful) { cmdText = ''; cmdPaletteOpen = false; }"
+                class="relative w-full order-last lg:order-none lg:flex-1 lg:max-w-xl min-w-0"
+            >
+                <input
+                    type="hidden"
+                    id="command-bar-workspace-input"
+                    name="workspace"
+                    value="{{ current_workspace_slug|default:'all' }}"
+                />
+                <div class="flex items-center ds-input ds-layer-inset ds-r-12 px-3 py-1.5 transition">
+                    <span class="text-xs font-mono font-bold ds-text-accent mr-2 select-none shrink-0">&gt;_</span>
+                    <input
+                        id="command-bar-input"
+                        type="text"
+                        name="command"
+                        x-model="cmdText"
+                        @focus="cmdPaletteOpen = true"
+                        autocomplete="off"
+                        placeholder="Capturar tarefa (Ctrl+K)... Ex: Ajustar checkout #wsa @henrique /manha !hoje"
+                        class="w-full min-w-0 bg-transparent text-xs sm:text-sm ds-text-primary placeholder-[#94a3b8] focus:outline-none font-mono"
+                    />
+                    <div class="flex items-center gap-1.5 ml-2 shrink-0">
+                        <!-- Botão Tátil de Ditado Nativo (Web Speech API PT-BR - Custo Zero) -->
+                        <button
+                            type="button"
+                            id="btn-voice-dictation"
+                            @click="startNativeDictation()"
+                            :class="isDictating ? 'ds-btn-urgent animate-pulse font-bold' : 'ds-btn-tactile ds-text-secondary hover:ds-urgent-text'"
+                            class="px-2.5 py-1 ds-r-8 text-xs font-mono inline-flex items-center gap-1 whitespace-nowrap transition"
+                            title="Ditado de Voz Nativo em Português (Custo Zero, Ilimitado)"
+                        >
+                            <span>&#127897;&#65039;</span>
+                            <span class="hidden sm:inline" x-text="isDictating ? 'Ouvindo...' : 'Ditado'">Ditado</span>
+                        </button>
+                        <kbd class="hidden md:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono ds-layer-raised ds-r-8 ds-text-secondary">
+                            Ctrl+K
+                        </kbd>
+                        <button
+                            type="submit"
+                            class="ds-btn-primary px-3 py-1 text-xs font-mono whitespace-nowrap"
+                        >
+                            Executar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Popover Tátil de Tags Rápidas do Ctrl + K (.ds-layer-popover) -->
+                <div
+                    id="command-bar-tags-container"
+                    x-show="cmdPaletteOpen"
+                    x-cloak
+                    @click.outside="cmdPaletteOpen = false"
+                    class="absolute left-0 right-0 mt-2 z-40 flex flex-wrap items-center gap-1.5 p-3 ds-layer-popover ds-r-16 text-[11px] font-mono"
+                >
+                    {% include "partials/command_bar_tags.html" %}
+                </div>
+            </form>
+
+            <!-- Direita: Botão Áudio IA + Botão 1-Click Sync Gemini + Cronômetro Ativo Compacto + Switch Tátil Dual-Theme -->
+            <div class="flex items-center justify-end gap-2 sm:gap-2.5 min-w-0 shrink-0 ml-auto lg:ml-0">
+                <!-- Botão Tátil Áudio IA (Com Medidor de Cota Diária Segura) -->
+                <button
+                    type="button"
+                    id="btn-audio-ia-modal"
+                    @click="audioModalOpen = true"
+                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-semibold ds-accent-text shrink-0 transition"
+                    title="Gravar ou Enviar Áudio IA com Trava de Cota Diária ({{ audio_quota.used_today|default:0 }}/{{ audio_quota.max_daily|default:20 }} hoje)"
+                >
+                    <span>&#127911;</span>
+                    <span class="hidden sm:inline">Áudio IA</span>
+                    <span class="px-1.5 py-0.2 ds-layer-inset ds-r-pill text-[10px] font-mono {% if audio_quota.is_quota_exceeded %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                        {{ audio_quota.used_today|default:0 }}/{{ audio_quota.max_daily|default:20 }}
+                    </span>
+                </button>
+
+                <!-- Botão Tátil 1-Click Clipboard Sync Gemini (Ctrl+Shift+V) -->
+                <button
+                    type="button"
+                    id="btn-gemini-clipboard-sync"
+                    @click="pasteGeminiSync()"
+                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-semibold ds-urgent-text shrink-0 transition"
+                    style="border-color: var(--ds-accent-secondary);"
+                    title="Colar e sincronizar bloco copiado do Chat do Gemini (Atalho: Ctrl+Shift+V)"
+                >
+                    <svg class="w-4 h-4 ds-urgent-text shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">&#9889; Sync Gemini</span>
+                    <span class="sm:hidden">&#9889; Gemini</span>
+                </button>
+
+                <div id="active-timer-container" class="min-w-0 max-w-[210px] sm:max-w-[300px] xl:w-[350px] xl:max-w-none">
+                    {% include "partials/active_timer.html" %}
+                </div>
+
+                <!-- Switch Tátil de Tema (Tactile Dark <-> Tactile Sand) -->
+                <div class="flex items-center gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-16 shrink-0" title="Alternar entre Tactile Dark e Tactile Sand">
+                    <span class="text-[10px] font-mono uppercase tracking-wider ds-text-secondary hidden sm:inline" x-text="theme === 'tactile-sand' ? 'Sand' : 'Dark'"></span>
+                    <button
+                        type="button"
+                        @click="toggleTheme()"
+                        class="ds-switch"
+                        :class="theme === 'tactile-sand' ? 'is-on' : ''"
+                        aria-label="Alternar Tema Tátil"
+                    >
+                        <span class="ds-switch-thumb"></span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- BARRA DE FILTRO DE CONTEXTO & ABAS DE VISÃO (Empilhamento Responsivo sem corte de sombra) -->
+        <div
+            id="workspace-context-bar"
+            class="w-full py-2 px-3 sm:px-6 border-b border-[#334155] ds-layer-base shrink-0"
+        >
+            {% include "partials/context_bar.html" %}
+        </div>
+
+        <!-- CONTAINER DE CONTEÚDO PRINCIPAL ROLÁVEL (#dashboard-content) -->
+        <div id="dashboard-content" class="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 space-y-6">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- CONTAINER DA GAVETA LATERAL DE DETALHES (SLIDE-OVER DRAWER .ds-layer-modal) -->
+    <div id="task-drawer-container"></div>
+
+    <!-- MODAL TÁTIL DE FALLBACK & TEMPLATE DO SYNC GEMINI (open-gemini-paste-modal) -->
+    <div
+        id="open-gemini-paste-modal"
+        x-show="geminiModalOpen"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+        <div
+            @click.outside="geminiModalOpen = false"
+            class="w-full max-w-xl ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4"
+        >
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="inline-flex items-center justify-center w-8 h-8 ds-layer-raised ds-r-12 ds-urgent-text shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold ds-text-primary truncate">
+                            &#9889; Colar Sync do Gemini AI
+                        </h3>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">
+                            Cole um bloco multi-linha (<code class="ds-urgent-text">/gemini</code>) ou JSON estruturado
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    @click="geminiModalOpen = false"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    &times;
+                </button>
+            </div>
+
+            <form
+                hx-post="{% url 'tasks:gemini_paste' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                @htmx:after-request="if($event.detail.successful) { geminiFallbackText = ''; geminiModalOpen = false; }"
+                class="space-y-3.5"
+            >
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug|default:'all' }}" />
+                <div class="flex items-center justify-between gap-2">
+                    <label class="text-[11px] font-mono uppercase ds-text-secondary">
+                        Conteúdo Copiado (Ctrl + V):
+                    </label>
+                    <button
+                        type="button"
+                        @click="copyGeminiTemplate()"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-accent-text"
+                    >
+                        <span x-text="geminiTemplateCopied ? 'Template Preenchido!' : 'Preencher Exemplo / Copiar Template'"></span>
+                    </button>
+                </div>
+
+                <textarea
+                    id="gemini-fallback-textarea"
+                    name="clipboard_text"
+                    x-model="geminiFallbackText"
+                    rows="7"
+                    required
+                    placeholder="/gemini Refatorar módulo de relatórios #saas !top3 @caio /manha&#10;Projeto: Deskify&#10;Tempo: 45m&#10;- [x] Ajustar contraste dos cards dark mode&#10;- [ ] Padronizar colunas da tabela&#10;Notas: Alinhado no chat com o Gemini."
+                    class="w-full ds-input ds-layer-inset ds-r-16 p-3.5 text-xs font-mono ds-text-primary focus:outline-none"
+                ></textarea>
+
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button
+                        type="button"
+                        @click="geminiModalOpen = false"
+                        class="px-3.5 py-2 ds-btn-tactile ds-r-12 text-xs font-mono"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        class="px-4 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"
+                    >
+                        &#9889; Sincronizar com Command Center
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TÁTIL DE ÁUDIO IA & MEDIDOR DE COTA DIÁRIA SEGURA (open-audio-ia-modal) -->
+    <div
+        id="open-audio-ia-modal"
+        x-show="audioModalOpen"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+        <div
+            @click.outside="audioModalOpen = false"
+            class="w-full max-w-lg ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4"
+        >
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="inline-flex items-center justify-center w-8 h-8 ds-layer-raised ds-r-12 ds-accent-text shrink-0">
+                        &#127911;
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold ds-text-primary truncate">
+                            &#127911; Captura Multimodal de Áudio IA
+                        </h3>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">
+                            Limite de Segurança: Máx 120s (3.5MB) &bull; Gemini 2.5 Flash Free Tier
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    @click="audioModalOpen = false"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                >
+                    &times;
+                </button>
+            </div>
+
+            <!-- Medidor de Cota Segura Hoje -->
+            <div class="ds-layer-inset ds-r-16 p-3.5 space-y-2">
+                <div class="flex items-center justify-between text-xs font-mono">
+                    <span class="ds-text-secondary font-semibold">Cota Segura Hoje:</span>
+                    <span class="{% if audio_quota.is_quota_exceeded %}ds-urgent-text{% else %}ds-accent-text{% endif %} font-bold">
+                        {{ audio_quota.used_today|default:0 }} / {{ audio_quota.max_daily|default:20 }} áudios
+                    </span>
+                </div>
+                <div class="ds-progress-track">
+                    <div
+                        class="ds-progress-fill"
+                        style="width: {{ audio_quota.quota_pct|default:0 }}%;"
+                    ></div>
+                </div>
+            </div>
+
+            <form
+                hx-post="{% url 'tasks:audio_upload' %}"
+                hx-encoding="multipart/form-data"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                @htmx:after-request="if($event.detail.successful) { recordedBase64 = ''; audioExtraHint = ''; audioModalOpen = false; }"
+                class="space-y-3.5"
+            >
+                <input type="hidden" name="workspace" value="{{ current_workspace_slug|default:'all' }}" />
+                <input type="hidden" name="audio_base64" :value="recordedBase64" />
+                <input type="hidden" name="mime_type" :value="recordedMimeType" />
+
+                <!-- Gravador MediaRecorder (Máx 120s) -->
+                <div class="ds-layer-inset ds-r-16 p-4 flex flex-col items-center justify-center gap-2.5 text-center">
+                    <button
+                        type="button"
+                        @click="toggleAudioRecording()"
+                        :class="isRecordingAudio ? 'ds-btn-urgent animate-pulse' : 'ds-btn-primary'"
+                        class="px-5 py-2.5 ds-r-pill text-xs font-mono font-bold inline-flex items-center gap-2"
+                    >
+                        <span x-text="isRecordingAudio ? '⏹ Parar Gravação (' + recordingSeconds + 's / 120s)' : '🎙️ Gravar Nota de Voz (Máx 120s)'"></span>
+                    </button>
+                    <p class="text-[11px] font-mono ds-text-secondary" x-show="recordedBase64">
+                        &#10003; Áudio gravado pronto para envio ({{ recordingSeconds }}s)
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                        Ou selecione um arquivo de áudio (.ogg, .mp3, .wav, máx 3.5MB):
+                    </label>
+                    <input
+                        type="file"
+                        name="audio_file"
+                        accept="audio/*"
+                        class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-secondary"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                        Dica / Tags Extras Opcionais (Ex: #wsa @pedro !top3):
+                    </label>
+                    <input
+                        type="text"
+                        name="extra_hint"
+                        x-model="audioExtraHint"
+                        placeholder="Ex: Revisar checkout no Portal MS CREW #wsa @henrique !hoje"
+                        class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                    />
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button
+                        type="button"
+                        @click="audioModalOpen = false"
+                        class="px-3.5 py-2 ds-btn-tactile ds-r-12 text-xs font-mono"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        class="px-4 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"
+                    >
+                        &#127911; Processar Áudio com IA
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Inicializador Global de Drag-and-Drop (SortableJS) com Touch Delay para Mobile -->
+    <script>
+        function initCommandCenterSortables() {
+            if (typeof Sortable === 'undefined') return;
+
+            const csrfMeta = document.body.getAttribute('hx-headers');
+            let csrfToken = '';
+            try {
+                if (csrfMeta) csrfToken = JSON.parse(csrfMeta)['X-CSRFToken'] || '';
+            } catch (e) {}
+
+            // 1. Colunas de Turnos (Manhã, Tarde, Noite)
+            document.querySelectorAll('[data-sortable-shift]').forEach((el) => {
+                if (el._sortableInstance) el._sortableInstance.destroy();
+                el._sortableInstance = new Sortable(el, {
+                    group: 'shifts-group',
+                    animation: 150,
+                    delay: 120,
+                    delayOnTouchOnly: true,
+                    touchStartThreshold: 5,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    handle: '[data-drag-handle]',
+                    onEnd: function (evt) {
+                        const itemEl = evt.item;
+                        const taskId = itemEl.getAttribute('data-task-id');
+                        const targetShift = evt.to.getAttribute('data-sortable-shift');
+                        const wsInput = document.getElementById('command-bar-workspace-input');
+                        const workspace = wsInput ? wsInput.value : 'all';
+                        if (!taskId || !targetShift || evt.from === evt.to) return;
+
+                        htmx.ajax('POST', `/tasks/${taskId}/move/?workspace=${encodeURIComponent(workspace)}&view=focus`, {
+                            target: '#dashboard-content',
+                            swap: 'innerHTML',
+                            values: { shift: targetShift },
+                            headers: { 'X-CSRFToken': csrfToken }
+                        });
+                    }
+                });
+            });
+
+            // 2. Colunas do Quadro Kanban (inbox, todo, doing, done)
+            document.querySelectorAll('[data-sortable-kanban]').forEach((el) => {
+                if (el._sortableInstance) el._sortableInstance.destroy();
+                el._sortableInstance = new Sortable(el, {
+                    group: 'kanban-group',
+                    animation: 150,
+                    delay: 120,
+                    delayOnTouchOnly: true,
+                    touchStartThreshold: 5,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onEnd: function (evt) {
+                        const itemEl = evt.item;
+                        const taskId = itemEl.getAttribute('data-task-id');
+                        const targetStatus = evt.to.getAttribute('data-sortable-kanban');
+                        const wsInput = document.getElementById('command-bar-workspace-input');
+                        const workspace = wsInput ? wsInput.value : 'all';
+                        if (!taskId || !targetStatus || evt.from === evt.to) return;
+
+                        htmx.ajax('POST', `/tasks/${taskId}/move/?workspace=${encodeURIComponent(workspace)}&view=kanban`, {
+                            target: '#dashboard-content',
+                            swap: 'innerHTML',
+                            values: { status: targetStatus },
+                            headers: { 'X-CSRFToken': csrfToken }
+                        });
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initCommandCenterSortables);
+        document.body.addEventListener('htmx:afterSwap', initCommandCenterSortables);
+        document.body.addEventListener('htmx:afterSettle', initCommandCenterSortables);
+    </script>
+</body>
+</html>

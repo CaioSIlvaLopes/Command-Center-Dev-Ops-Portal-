@@ -1,0 +1,84 @@
+<!-- Chip / Botão Tátil de Responsável com Popover 1-Click (Alpine.js + HTMX) -->
+<div x-data="{ openAssign: false }" class="relative inline-flex items-center">
+    {% if task.assignee %}
+    <button
+        type="button"
+        @click.stop="openAssign = !openAssign"
+        class="inline-flex items-center gap-1 px-2 py-0.5 ds-btn-tactile ds-r-pill text-[10px] font-mono {% if task.assignee.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %} font-semibold"
+        title="Responsável: {{ task.assignee.name }} (@{{ task.assignee.handle }}) &mdash; Clique para trocar ou retirar"
+    >
+        <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full ds-layer-inset text-[8px] font-bold">
+            {{ task.assignee.avatar_initials }}
+        </span>
+        <span>@{{ task.assignee.handle }}</span>
+    </button>
+    {% elif task.assigned_to %}
+    <button
+        type="button"
+        @click.stop="openAssign = !openAssign"
+        class="inline-flex items-center gap-1 px-2 py-0.5 ds-btn-tactile ds-r-pill text-[10px] font-mono ds-accent-text font-semibold"
+        title="Responsável: {{ task.assigned_to }} &mdash; Clique para trocar ou retirar"
+    >
+        <span>{{ task.assigned_to }}</span>
+    </button>
+    {% else %}
+    <button
+        type="button"
+        @click.stop="openAssign = !openAssign"
+        class="inline-flex items-center gap-0.5 px-2 py-0.5 ds-btn-tactile ds-r-pill text-[10px] font-mono ds-text-secondary hover:ds-accent-text"
+        title="Atribuir responsável em 1 clique"
+    >
+        <span>+ @</span>
+    </button>
+    {% endif %}
+
+    <!-- Popover Tátil de Seleção/Remoção Rápida em 1 Clique -->
+    <div
+        x-show="openAssign"
+        x-cloak
+        @click.outside="openAssign = false"
+        class="absolute left-0 bottom-full mb-1.5 z-40 w-48 p-2 ds-layer-popover ds-r-16 space-y-1 text-[11px] font-mono"
+    >
+        <div class="flex items-center justify-between px-1.5 py-0.5 text-[10px] uppercase ds-text-secondary">
+            <span>Responsável (1-Click)</span>
+            <button type="button" @click="openAssign = false" class="hover:ds-text-primary">&times;</button>
+        </div>
+
+        {% for member in team_members %}
+        <button
+            type="button"
+            @click="openAssign = false"
+            hx-post="{% url 'tasks:assign_member' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+            hx-vals='{"member_id": "{{ member.id }}"}'
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            class="w-full flex items-center justify-between gap-1.5 px-2 py-1.5 ds-r-8 text-left transition {% if task.assignee_id == member.id %}ds-layer-inset {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %} font-bold{% else %}hover:ds-layer-raised ds-text-primary{% endif %}"
+        >
+            <span class="flex items-center gap-1.5 truncate">
+                <span class="inline-flex items-center justify-center w-4 h-4 rounded-full ds-layer-raised text-[9px] font-bold {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %} shrink-0">
+                    {{ member.avatar_initials }}
+                </span>
+                <span class="truncate">@{{ member.handle }}</span>
+            </span>
+            <span class="text-[10px] ds-text-secondary truncate">{{ member.name }}</span>
+        </button>
+        {% endfor %}
+
+        {% if task.assignee or task.assigned_to %}
+        <div class="pt-1 mt-1 border-t border-[#334155]/60">
+            <button
+                type="button"
+                @click="openAssign = false"
+                hx-post="{% url 'tasks:assign_member' task.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+                hx-vals='{"member_id": "none"}'
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                class="w-full flex items-center justify-center gap-1 px-2 py-1.5 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text font-semibold"
+            >
+                <span>&times; Retirar atribuição</span>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+

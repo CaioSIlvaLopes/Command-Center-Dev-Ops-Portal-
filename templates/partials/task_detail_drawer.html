@@ -1,0 +1,455 @@
+{% if drawer_task %}
+<div
+    x-data="{
+        open: true,
+        confirmDelete: false,
+        topThreeChecked: {{ drawer_task.is_top_three|yesno:'true,false' }},
+        closeDrawer() {
+            this.open = false;
+            const c = document.getElementById('task-drawer-container');
+            if (c) c.innerHTML = '';
+        }
+    }"
+    x-show="open"
+    class="relative z-50"
+>
+    <!-- Backdrop escuro -->
+    <div
+        @click="closeDrawer()"
+        class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
+    ></div>
+
+    <!-- Painel Slide-Over Fixo à Direita com Elevação Modal (.ds-layer-modal) e Responsividade Mobile -->
+    <aside
+        class="fixed inset-y-0 right-0 z-50 w-full sm:max-w-lg ds-layer-modal overflow-y-auto flex flex-col justify-between"
+    >
+        <!-- Header Fixo (sticky top-0 z-10) com Botão Grande de Fechar (✕) para Uso Mobile -->
+        <div
+            class="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 sm:px-6 py-3.5 border-b ds-layer-base"
+            style="border-color: var(--ds-border-subtle);"
+        >
+            <div class="flex flex-wrap items-center gap-2 min-w-0">
+                <span class="ds-badge {% if drawer_task.workspace.is_orange_accent %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                    #{{ drawer_task.workspace.slug }}
+                </span>
+                <span class="ds-badge ds-badge-urgent">
+                    Score P:{{ drawer_task.priority_score }}
+                </span>
+                {% if drawer_task.is_top_three %}
+                <span class="ds-badge ds-badge-urgent">
+                    ★ TOP 3
+                </span>
+                {% endif %}
+            </div>
+
+            <button
+                type="button"
+                @click="closeDrawer()"
+                class="inline-flex items-center justify-center gap-1.5 px-3 py-2 ds-btn-tactile ds-r-12 text-xs font-mono font-bold shrink-0"
+                title="Fechar (Esc)"
+            >
+                <span>Fechar</span>
+                <span class="text-sm leading-none">&times;</span>
+            </button>
+        </div>
+
+        <div class="p-4 sm:p-6 space-y-5 flex-1">
+            <!-- Seção 1: Subtarefas (Checklist Tátil) com Barra de Progresso -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                        Checklist de Subtarefas
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-mono ds-accent-text font-semibold">
+                            {{ drawer_task.subtasks_done }}/{{ drawer_task.subtasks_total }} concluídas ({{ drawer_task.subtasks_progress_pct }}%)
+                        </span>
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:ai_subtasks' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-urgent-text font-semibold inline-flex items-center gap-1"
+                            title="Quebrar esta tarefa em 3 a 5 subtarefas técnicas com IA"
+                        >
+                            <span>&#9889; Quebrar com IA</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ds-progress-track">
+                    <div
+                        class="ds-progress-fill"
+                        style="width: {{ drawer_task.subtasks_progress_pct }}%;"
+                    ></div>
+                </div>
+
+                <!-- Lista de Subtarefas com .ds-checkbox -->
+                <div class="space-y-2 pt-1">
+                    {% for st in drawer_task.subtasks.all %}
+                    <div class="flex items-center justify-between gap-2 px-3 py-2 ds-layer-raised ds-r-12 min-w-0">
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:subtask_toggle' st.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="flex items-center gap-2.5 text-left min-w-0 flex-1"
+                        >
+                            <span class="ds-checkbox {% if st.is_done %}is-checked{% endif %}">
+                                {% if st.is_done %}
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                {% endif %}
+                            </span>
+                            <span class="text-xs {% if st.is_done %}ds-text-secondary line-through{% else %}ds-text-primary{% endif %} break-words truncate">
+                                {{ st.title }}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:subtask_delete' st.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="text-xs font-mono ds-text-secondary hover:ds-urgent-text px-1.5 py-0.5 shrink-0"
+                            title="Remover subtarefa"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                    {% empty %}
+                    <p class="text-xs ds-text-secondary italic py-1">
+                        Nenhuma subtarefa cadastrada. Adicione passos abaixo.
+                    </p>
+                    {% endfor %}
+                </div>
+
+                <!-- Formulário Rápido para Nova Subtarefa -->
+                <form
+                    hx-post="{% url 'tasks:subtask_add' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                    hx-target="#task-drawer-container"
+                    hx-swap="innerHTML"
+                    class="flex items-center gap-2 pt-1"
+                >
+                    <input
+                        type="text"
+                        name="title"
+                        required
+                        placeholder="Adicionar item ao checklist..."
+                        class="flex-1 min-w-0 ds-input ds-r-12 px-3 py-1.5 text-xs"
+                    />
+                    <button
+                        type="submit"
+                        class="px-3 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-semibold shrink-0"
+                    >
+                        + Item
+                    </button>
+                </form>
+            </div>
+
+            <!-- Seção 2: Registro Rápido de Tempo Manual -->
+            <div class="ds-layer-inset ds-r-16 p-3.5 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <span class="block text-[11px] font-mono uppercase ds-text-secondary">Tempo Registrado</span>
+                    <span class="text-sm font-mono font-bold ds-accent-text">{{ drawer_task.total_logged_minutes }} min</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:add_manual' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-vals='{"minutes": "15", "from_drawer": "1"}'
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                    >
+                        +15m
+                    </button>
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:add_manual' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-vals='{"minutes": "30", "from_drawer": "1"}'
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                    >
+                        +30m
+                    </button>
+                    <button
+                        type="button"
+                        hx-post="{% url 'timetracker:add_manual' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                        hx-vals='{"minutes": "60", "from_drawer": "1"}'
+                        hx-target="#task-drawer-container"
+                        hx-swap="innerHTML"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                    >
+                        +1h
+                    </button>
+                </div>
+            </div>
+
+            <!-- Seção 3: Formulário de Edição Completa da Tarefa e Notas (Grids Responsivos grid-cols-1 sm:grid-cols-2) -->
+            <form
+                hx-post="{% url 'tasks:update_detail' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                hx-target="#task-drawer-container"
+                hx-swap="innerHTML"
+                class="space-y-3.5"
+            >
+                <div>
+                    <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Título da Tarefa</label>
+                    <input
+                        type="text"
+                        name="title"
+                        value="{{ drawer_task.title }}"
+                        required
+                        class="w-full ds-input ds-r-12 px-3 py-2 text-xs sm:text-sm"
+                    />
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Frente (Workspace)</label>
+                        <select
+                            name="workspace_id"
+                            class="w-full ds-input ds-r-12 px-2.5 py-2 text-xs"
+                        >
+                            {% for ws in workspaces %}
+                            <option value="{{ ws.id }}" {% if drawer_task.workspace_id == ws.id %}selected{% endif %}>
+                                {{ ws.name }} (#{{ ws.slug }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Projeto / Loja</label>
+                        <select
+                            name="project_id"
+                            class="w-full ds-input ds-r-12 px-2.5 py-2 text-xs"
+                        >
+                            <option value="">-- Nenhum --</option>
+                            {% for proj in all_projects %}
+                            <option value="{{ proj.id }}" {% if drawer_task.project_id == proj.id %}selected{% endif %}>
+                                {{ proj.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Turno</label>
+                        <select
+                            name="shift"
+                            class="w-full ds-input ds-r-12 px-2.5 py-2 text-xs"
+                        >
+                            <option value="morning" {% if drawer_task.shift == 'morning' %}selected{% endif %}>Manhã - Deep Work</option>
+                            <option value="afternoon" {% if drawer_task.shift == 'afternoon' %}selected{% endif %}>Tarde - Ops/E-com</option>
+                            <option value="night" {% if drawer_task.shift == 'night' %}selected{% endif %}>Noite - Estudos/Games</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Status</label>
+                        <select
+                            name="status"
+                            class="w-full ds-input ds-r-12 px-2.5 py-2 text-xs"
+                        >
+                            <option value="inbox" {% if drawer_task.status == 'inbox' %}selected{% endif %}>Inbox (Triagem)</option>
+                            <option value="todo" {% if drawer_task.status == 'todo' %}selected{% endif %}>A Fazer</option>
+                            <option value="doing" {% if drawer_task.status == 'doing' %}selected{% endif %}>Em Execução</option>
+                            <option value="done" {% if drawer_task.status == 'done' %}selected{% endif %}>Concluída</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Impacto (1 a 5)</label>
+                        <input
+                            type="number"
+                            name="impact"
+                            min="1"
+                            max="5"
+                            value="{{ drawer_task.impact }}"
+                            class="w-full ds-input ds-r-12 px-3 py-1.5 text-xs font-mono"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Urgência (1 a 5)</label>
+                        <input
+                            type="number"
+                            name="urgency"
+                            min="1"
+                            max="5"
+                            value="{{ drawer_task.urgency }}"
+                            class="w-full ds-input ds-r-12 px-3 py-1.5 text-xs font-mono"
+                        />
+                    </div>
+                </div>
+
+                <!-- Seletor Tátil de Responsável em 1 Clique (Pílulas de Equipe) -->
+                <div class="ds-layer-inset ds-r-16 p-3.5 space-y-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="block text-[11px] font-mono font-bold uppercase ds-text-primary">
+                            Responsável pela Tarefa (1-Click)
+                        </label>
+                        {% if drawer_task.assignee %}
+                        <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[11px] font-mono {% if drawer_task.assignee.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                            Atribuído: @{{ drawer_task.assignee.handle }} ({{ drawer_task.assignee.name }})
+                        </span>
+                        {% elif drawer_task.assigned_to %}
+                        <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[11px] font-mono ds-accent-text">
+                            Atribuído: {{ drawer_task.assigned_to }}
+                        </span>
+                        {% else %}
+                        <span class="text-[11px] font-mono ds-text-secondary">Sem responsável</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Botão Sem Responsável / Retirar Atribuição -->
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:assign_member' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-vals='{"member_id": "none", "from_drawer": "1"}'
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 ds-r-pill text-xs font-mono transition {% if not drawer_task.assignee and not drawer_task.assigned_to %}ds-layer-raised ds-urgent-text font-bold{% else %}ds-btn-tactile ds-text-secondary hover:ds-urgent-text{% endif %}"
+                            title="Retirar atribuição de responsável desta tarefa"
+                        >
+                            <span>Sem Responsável / Retirar &times;</span>
+                        </button>
+
+                        <!-- Pílulas Táteis de cada TeamMember Ativo -->
+                        {% for member in team_members %}
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:assign_member' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-vals='{"member_id": "{{ member.id }}", "from_drawer": "1", "toggle": "1"}'
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 ds-r-pill text-xs font-mono transition {% if drawer_task.assignee_id == member.id %}{% if member.is_orange_accent %}ds-btn-urgent font-bold{% else %}ds-btn-primary font-bold{% endif %}{% else %}ds-btn-tactile ds-text-primary{% endif %}"
+                            title="Atribuir a {{ member.name }} (@{{ member.handle }})"
+                        >
+                            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold {% if drawer_task.assignee_id == member.id %}bg-white/20 text-white{% else %}ds-layer-inset {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}{% endif %}">
+                                {{ member.avatar_initials }}
+                            </span>
+                            <span>@{{ member.handle }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Data Limite</label>
+                        <input
+                            type="date"
+                            name="due_date"
+                            value="{{ drawer_task.due_date|date:'Y-m-d' }}"
+                            class="w-full ds-input ds-r-12 px-3 py-1.5 text-xs font-mono"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Ref. Externa (Issue/PR/SKU)</label>
+                        <input
+                            type="text"
+                            name="external_ref"
+                            value="{{ drawer_task.external_ref }}"
+                            placeholder="Ex: GH#142 ou SKU-IMO-8841"
+                            class="w-full ds-input ds-r-12 px-3 py-1.5 text-xs font-mono"
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-mono uppercase ds-text-secondary mb-1">Notas &amp; Especificações Técnicas</label>
+                    <textarea
+                        name="notes"
+                        rows="4"
+                        placeholder="Adicione links, critérios de aceite, comandos ou observações..."
+                        class="w-full ds-input ds-r-12 p-3 text-xs"
+                    >{{ drawer_task.notes }}</textarea>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <label class="inline-flex items-center gap-2.5 text-xs cursor-pointer" @click="topThreeChecked = !topThreeChecked">
+                        <input
+                            type="checkbox"
+                            name="is_top_three"
+                            value="1"
+                            x-model="topThreeChecked"
+                            class="sr-only"
+                        />
+                        <span class="ds-switch" :class="topThreeChecked ? 'is-on' : ''"></span>
+                        <span class="font-mono ds-urgent-text font-semibold">Destacar no Top 3 do Dia</span>
+                    </label>
+
+                    <button
+                        type="submit"
+                        class="px-4 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-semibold"
+                    >
+                        Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Rodapé do Drawer: Exclusão com Confirmação Tátil -->
+        <div class="px-4 sm:px-6 py-4 border-t flex items-center justify-between" style="border-color: var(--ds-border-subtle);">
+            <template x-if="!confirmDelete">
+                <button
+                    type="button"
+                    @click="confirmDelete = true"
+                    class="text-xs font-mono ds-text-secondary hover:ds-urgent-text transition"
+                >
+                    Excluir Tarefa...
+                </button>
+            </template>
+
+            <template x-if="confirmDelete">
+                <div class="flex flex-wrap items-center justify-between w-full gap-2 p-2.5 ds-layer-inset ds-r-12">
+                    <span class="text-xs font-mono ds-urgent-text font-semibold">Confirmar exclusão?</span>
+                    <div class="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            @click="confirmDelete = false"
+                            class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            @click="closeDrawer()"
+                            hx-post="{% url 'tasks:delete_task' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="px-2.5 py-1 ds-btn-urgent ds-r-8 text-xs font-mono font-bold"
+                        >
+                            Confirmar Exclusão
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </aside>
+</div>
+{% endif %}
+
+{% if include_dashboard_oob %}
+<div id="dashboard-content" hx-swap-oob="true">
+    {% include "partials/dashboard_content.html" %}
+</div>
+<div
+    id="workspace-context-bar"
+    hx-swap-oob="true"
+    class="w-full py-2 px-3 sm:px-6 border-b border-[#334155] ds-layer-base shrink-0"
+>
+    {% include "partials/context_bar.html" %}
+</div>
+<div id="active-timer-container" hx-swap-oob="true" class="min-w-0 max-w-[230px] sm:max-w-[320px] xl:w-[370px] xl:max-w-none">
+    {% include "partials/active_timer.html" %}
+</div>
+{% endif %}
