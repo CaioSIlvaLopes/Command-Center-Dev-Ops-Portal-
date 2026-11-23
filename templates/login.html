@@ -5,6 +5,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Acesso Restrito &mdash; Command Center (Dev &amp; Ops Portal)</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon.png' %}">
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/favicon.png' %}">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{% static 'css/tactile-ds.css' %}" />
     <script>
@@ -19,21 +22,21 @@
 <body class="ds-app-body min-h-screen flex items-center justify-center p-4">
     <main class="w-full max-w-md ds-layer-raised ds-r-24 p-6 sm:p-8 space-y-6">
         <!-- Branding Tátil -->
-        <div class="flex items-center justify-between border-b pb-4" style="border-color: var(--ds-border-subtle);">
-            <div class="flex items-center gap-3">
-                <div class="w-11 h-11 ds-layer-inset ds-r-12 flex items-center justify-center ds-accent-text font-mono font-bold text-base">
-                    &gt;_
-                </div>
-                <div>
+        <div class="flex flex-col items-center text-center space-y-3 border-b pb-5" style="border-color: var(--ds-border-subtle);">
+            <div class="w-16 h-16 rounded-2xl overflow-hidden mx-auto ds-layer-raised">
+                <img src="{% static 'img/logo.png' %}" alt="Command Center Logo" class="w-full h-full object-cover" />
+            </div>
+            <div class="space-y-1">
+                <div class="flex items-center justify-center gap-2">
                     <h1 class="text-base font-bold tracking-tight ds-text-primary">
                         COMMAND CENTER
                     </h1>
-                    <p class="text-[11px] font-mono uppercase tracking-widest ds-accent-text">
-                        Single-Tenant Ops Guard
-                    </p>
+                    <span class="ds-badge ds-badge-urgent">&#128274; AUTH</span>
                 </div>
+                <p class="text-[11px] font-mono uppercase tracking-widest ds-accent-text">
+                    Single-Tenant Ops Guard
+                </p>
             </div>
-            <span class="ds-badge ds-badge-urgent">&#128274; AUTH</span>
         </div>
 
         {% if form.errors %}

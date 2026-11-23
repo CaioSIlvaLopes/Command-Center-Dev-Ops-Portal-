@@ -1,9 +1,10 @@
+{% load static %}
 <div class="p-4 space-y-5">
     <!-- Branding Header Tátil -->
     <div class="flex items-center justify-between">
         <a href="{% url 'tasks:dashboard' %}" class="flex items-center gap-2.5 group min-w-0">
-            <div class="w-9 h-9 shrink-0 ds-layer-raised ds-r-12 flex items-center justify-center ds-text-accent font-mono font-bold text-sm">
-                &gt;_
+            <div class="w-9 h-9 rounded-xl overflow-hidden shrink-0 ds-layer-raised">
+                <img src="{% static 'img/logo.png' %}" alt="Command Center Logo" class="w-full h-full object-cover" />
             </div>
             <div class="min-w-0">
                 <span class="block text-sm font-bold tracking-tight ds-text-primary truncate">COMMAND CENTER</span>
