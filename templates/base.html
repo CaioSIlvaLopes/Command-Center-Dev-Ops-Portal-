@@ -71,6 +71,7 @@
 <body
     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
     x-data="{
+        commandModalOpen: false,
         cmdPaletteOpen: false,
         cmdText: '',
         sidebarOpen: false,
@@ -98,12 +99,22 @@
             localStorage.setItem('cc_theme', this.theme);
             document.documentElement.setAttribute('data-theme', this.theme);
         },
+        openCommandModal() {
+            this.commandModalOpen = true;
+            this.$nextTick(() => {
+                this.$refs.commandInput?.focus();
+            });
+        },
         appendToken(token) {
             const trimmed = this.cmdText.trim();
             this.cmdText = trimmed ? `${trimmed} ${token} ` : `${token} `;
             this.$nextTick(() => {
-                const el = document.getElementById('command-bar-input');
-                if (el) el.focus();
+                if (this.$refs.commandInput) {
+                    this.$refs.commandInput.focus();
+                } else {
+                    const el = document.getElementById('command-bar-input');
+                    if (el) el.focus();
+                }
             });
         },
         copyGeminiTemplate() {
@@ -197,6 +208,7 @@
                     headers: { 'X-CSRFToken': csrfToken }
                 });
                 this.cmdText = '';
+                this.commandModalOpen = false;
             };
             rec.start();
         },
@@ -250,13 +262,9 @@
                 this.pasteGeminiSync();
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
-                this.cmdPaletteOpen = true;
+                this.commandModalOpen = true;
                 this.$nextTick(() => {
-                    const input = document.getElementById('command-bar-input');
-                    if (input) {
-                        input.focus();
-                        input.select();
-                    }
+                    this.$refs.commandInput?.focus();
                 });
             } else if (e.altKey && ['0', '1', '2', '3', '4', '5'].includes(e.key)) {
                 e.preventDefault();
@@ -264,9 +272,11 @@
                 const btn = document.getElementById(btnId);
                 if (btn) btn.click();
             } else if (e.key === 'Escape') {
+                this.commandModalOpen = false;
                 this.cmdPaletteOpen = false;
                 this.sidebarOpen = false;
                 this.geminiModalOpen = false;
+                this.audioModalOpen = false;
                 const drawer = document.getElementById('task-drawer-container');
                 if (drawer) drawer.innerHTML = '';
             }
@@ -310,95 +320,41 @@
 
     <!-- ÁREA PRINCIPAL (App Shell Main) -->
     <main class="flex-1 flex flex-col min-w-0 max-w-full lg:h-screen lg:overflow-hidden">
-        <!-- HEADER PRINCIPAL RESPONSIVO (Linha 1 Mobile: Menu+Logo e Timer+Tema | Linha 2 Mobile / Centro Desktop: Ctrl+K) -->
-        <header class="shrink-0 border-b border-[#334155] ds-layer-base z-20 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5 p-3 sm:px-6">
-            <!-- Esquerda: Botão Hambúrguer + Identidade Compacta Mobile -->
-            <div class="flex items-center gap-2 shrink-0 lg:hidden">
+        <!-- HEADER PRINCIPAL RESPONSIVO (Botão + Nova Tarefa Ctrl+K, Áudio IA, Sync Gemini, Timer e Tema) -->
+        <header class="shrink-0 border-b border-[#334155] ds-layer-base z-20 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 sm:gap-2.5 p-3 sm:px-6 min-w-0">
+            <!-- Esquerda: Botão Hambúrguer (Mobile) + Botão Tátil + Nova Tarefa (Ctrl + K) -->
+            <div class="flex items-center gap-2 min-w-0 shrink-0">
                 <button
                     type="button"
                     @click="sidebarOpen = true"
-                    class="p-2 ds-btn-tactile ds-r-12"
+                    class="p-2 ds-btn-tactile ds-r-12 lg:hidden shrink-0"
                     title="Abrir Menu"
                 >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
-                <div class="flex items-center gap-1.5">
-                    <span class="inline-flex items-center justify-center w-7 h-7 ds-btn-primary ds-r-8 font-mono text-xs font-bold">
-                        CC
-                    </span>
-                    <span class="text-xs font-bold tracking-tight ds-text-primary hidden xs:inline sm:inline">
-                        Command Center
-                    </span>
-                </div>
+
+                <!-- Botão Tátil Compacto de Captura Rápida (Nova Tarefa | Ctrl+K) -->
+                <button
+                    type="button"
+                    id="btn-open-command-modal"
+                    @click="openCommandModal()"
+                    class="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold shrink-0 transition order-last lg:order-none"
+                    title="Capturar Nova Tarefa Rápida (Atalho: Ctrl+K)"
+                >
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    <span>Nova Tarefa</span>
+                    <kbd class="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono ds-layer-inset ds-r-8 ds-text-primary">
+                        Ctrl+K
+                    </kbd>
+                </button>
             </div>
 
-            <!-- Centro (Desktop) / Linha 2 Própria 100% Legível (Mobile): Barra de Comando (Ctrl + K) -->
-            <form
-                hx-post="{% url 'tasks:command_create' %}"
-                hx-target="#dashboard-content"
-                hx-swap="innerHTML"
-                @htmx:after-request="if($event.detail.successful) { cmdText = ''; cmdPaletteOpen = false; }"
-                class="relative w-full order-last lg:order-none lg:flex-1 lg:max-w-xl min-w-0"
-            >
-                <input
-                    type="hidden"
-                    id="command-bar-workspace-input"
-                    name="workspace"
-                    value="{{ current_workspace_slug|default:'all' }}"
-                />
-                <div class="flex items-center ds-input ds-layer-inset ds-r-12 px-3 py-1.5 transition">
-                    <span class="text-xs font-mono font-bold ds-text-accent mr-2 select-none shrink-0">&gt;_</span>
-                    <input
-                        id="command-bar-input"
-                        type="text"
-                        name="command"
-                        x-model="cmdText"
-                        @focus="cmdPaletteOpen = true"
-                        autocomplete="off"
-                        placeholder="Capturar tarefa (Ctrl+K)... Ex: Ajustar checkout #wsa @henrique /manha !hoje"
-                        class="w-full min-w-0 bg-transparent text-xs sm:text-sm ds-text-primary placeholder-[#94a3b8] focus:outline-none font-mono"
-                    />
-                    <div class="flex items-center gap-1.5 ml-2 shrink-0">
-                        <!-- Botão Tátil de Ditado Nativo (Web Speech API PT-BR - Custo Zero) -->
-                        <button
-                            type="button"
-                            id="btn-voice-dictation"
-                            @click="startNativeDictation()"
-                            :class="isDictating ? 'ds-btn-urgent animate-pulse font-bold' : 'ds-btn-tactile ds-text-secondary hover:ds-urgent-text'"
-                            class="px-2.5 py-1 ds-r-8 text-xs font-mono inline-flex items-center gap-1 whitespace-nowrap transition"
-                            title="Ditado de Voz Nativo em Português (Custo Zero, Ilimitado)"
-                        >
-                            <span>&#127897;&#65039;</span>
-                            <span class="hidden sm:inline" x-text="isDictating ? 'Ouvindo...' : 'Ditado'">Ditado</span>
-                        </button>
-                        <kbd class="hidden md:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono ds-layer-raised ds-r-8 ds-text-secondary">
-                            Ctrl+K
-                        </kbd>
-                        <button
-                            type="submit"
-                            class="ds-btn-primary px-3 py-1 text-xs font-mono whitespace-nowrap"
-                        >
-                            Executar
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Popover Tátil de Tags Rápidas do Ctrl + K (.ds-layer-popover) -->
-                <div
-                    id="command-bar-tags-container"
-                    x-show="cmdPaletteOpen"
-                    x-cloak
-                    @click.outside="cmdPaletteOpen = false"
-                    class="absolute left-0 right-0 mt-2 z-40 flex flex-wrap items-center gap-1.5 p-3 ds-layer-popover ds-r-16 text-[11px] font-mono"
-                >
-                    {% include "partials/command_bar_tags.html" %}
-                </div>
-            </form>
-
             <!-- Direita: Botão Áudio IA + Botão 1-Click Sync Gemini + Cronômetro Ativo Compacto + Switch Tátil Dual-Theme -->
-            <div class="flex items-center justify-end gap-2 sm:gap-2.5 min-w-0 shrink-0 ml-auto lg:ml-0">
+            <div class="flex items-center justify-end gap-1.5 sm:gap-2.5 min-w-0 shrink-0 ml-auto">
                 <!-- Botão Tátil Áudio IA (Com Medidor de Cota Diária Segura) -->
                 <button
                     type="button"
@@ -414,7 +370,7 @@
                     </span>
                 </button>
 
-                <!-- Botão Tátil 1-Click Clipboard Sync Gemini (Ctrl+Shift+V) -->
+                <!-- Botão Tátil 1-Click Clipboard Sync Gemini (Ctrl+Shift+V) — Sem emoji duplicado -->
                 <button
                     type="button"
                     id="btn-gemini-clipboard-sync"
@@ -426,11 +382,11 @@
                     <svg class="w-4 h-4 ds-urgent-text shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                     </svg>
-                    <span class="hidden sm:inline">&#9889; Sync Gemini</span>
-                    <span class="sm:hidden">&#9889; Gemini</span>
+                    <span class="hidden sm:inline">Sync Gemini</span>
+                    <span class="sm:hidden">Gemini</span>
                 </button>
 
-                <div id="active-timer-container" class="min-w-0 max-w-[210px] sm:max-w-[300px] xl:w-[350px] xl:max-w-none">
+                <div id="active-timer-container" class="min-w-0 max-w-[180px] sm:max-w-[300px] xl:w-[350px] xl:max-w-none">
                     {% include "partials/active_timer.html" %}
                 </div>
 
@@ -466,6 +422,113 @@
 
     <!-- CONTAINER DA GAVETA LATERAL DE DETALHES (SLIDE-OVER DRAWER .ds-layer-modal) -->
     <div id="task-drawer-container"></div>
+
+    <!-- MODAL TÁTIL DE CAPTURA RÁPIDA DE TAREFA (Ctrl + K) -->
+    <div
+        id="open-command-bar-modal"
+        x-show="commandModalOpen"
+        x-cloak
+        x-transition.opacity
+        @click.self="commandModalOpen = false"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+        <div
+            @click.outside="commandModalOpen = false"
+            class="w-[calc(100%-2rem)] max-w-2xl mx-4 ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4 min-w-0"
+        >
+            <!-- Cabeçalho do Modal -->
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="inline-flex items-center justify-center w-8 h-8 ds-layer-raised ds-r-12 ds-accent-text font-mono font-bold text-xs shrink-0">
+                        &gt;_
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold ds-text-primary truncate">
+                            Captura Rápida de Tarefa
+                        </h3>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">
+                            Use tags <code class="ds-accent-text">#frente</code>, <code class="ds-accent-text">@responsavel</code>, <code class="ds-urgent-text">!top3</code>, <code class="ds-urgent-text">!hoje</code> ou <code class="ds-accent-text">/turno</code>
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-[10px] font-mono ds-layer-inset ds-r-8 ds-text-secondary">
+                        ESC
+                    </kbd>
+                    <button
+                        type="button"
+                        @click="commandModalOpen = false"
+                        class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono"
+                        title="Fechar Modal"
+                    >
+                        &times;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulário de Comando Rápido (HTMX + Ditado Web Speech API) -->
+            <form
+                hx-post="{% url 'tasks:command_create' %}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                @htmx:after-request="if ($event.detail.successful) { commandModalOpen = false; cmdText = ''; $event.target.reset(); }"
+                class="space-y-4 min-w-0"
+            >
+                <input
+                    type="hidden"
+                    id="command-bar-workspace-input"
+                    name="workspace"
+                    value="{{ current_workspace_slug|default:'all' }}"
+                />
+
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div class="flex-1 flex items-center ds-input ds-layer-inset ds-r-12 px-3.5 py-2.5 min-w-0">
+                        <span class="text-xs font-mono font-bold ds-text-accent mr-2.5 select-none shrink-0">&gt;_</span>
+                        <input
+                            id="command-bar-input"
+                            x-ref="commandInput"
+                            type="text"
+                            name="command"
+                            x-model="cmdText"
+                            autocomplete="off"
+                            placeholder="Ex: Ajustar checkout #wsa @henrique /manha !hoje"
+                            class="w-full min-w-0 bg-transparent text-xs sm:text-sm ds-text-primary placeholder-[#94a3b8] focus:outline-none font-mono"
+                        />
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 shrink-0">
+                        <!-- Botão Tátil de Ditado Nativo (Web Speech API PT-BR - Custo Zero) -->
+                        <button
+                            type="button"
+                            id="btn-voice-dictation"
+                            @click="startNativeDictation()"
+                            :class="isDictating ? 'ds-btn-urgent animate-pulse font-bold' : 'ds-btn-tactile ds-text-secondary hover:ds-urgent-text'"
+                            class="px-3 py-2.5 ds-r-12 text-xs font-mono inline-flex items-center justify-center gap-1.5 whitespace-nowrap transition flex-1 sm:flex-initial"
+                            title="Ditado de Voz Nativo em Português (Custo Zero, Ilimitado)"
+                        >
+                            <span>&#127897;&#65039;</span>
+                            <span x-text="isDictating ? 'Ouvindo...' : 'Ditado'">Ditado</span>
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="ds-btn-primary ds-r-12 px-4 py-2.5 text-xs font-mono font-bold whitespace-nowrap flex-1 sm:flex-initial"
+                        >
+                            Executar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pílulas de Sugestão de Tags (#command-bar-tags-container preservado para hx-swap-oob) -->
+                <div
+                    id="command-bar-tags-container"
+                    class="flex flex-wrap items-center gap-1.5 p-3 ds-layer-inset ds-r-16 text-[11px] font-mono"
+                >
+                    {% include "partials/command_bar_tags.html" %}
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- MODAL TÁTIL DE FALLBACK & TEMPLATE DO SYNC GEMINI (open-gemini-paste-modal) -->
     <div

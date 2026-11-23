@@ -26,8 +26,10 @@ Elimina a dispersão de contexto entre múltiplas frentes de trabalho (**WSA Cre
 | **Design System** | **Tactile / Soft-Neumorphic UI + Tailwind CSS CDN** | Física de elevação em 5 níveis, cavidades `.ds-layer-inset` e motor Dual-Theme (`tactile-dark` / `tactile-sand`) em `static/css/tactile-ds.css` |
 | **Banco de Dados** | **PostgreSQL (`psycopg 3`) / SQLite3 Fallback** | Persistência relacional com `GeneratedField` nativo no banco para `priority_score = impact * urgency` |
 | **Filas & Agendamento** | **Celery 5.4 + Redis 5.0** (`config/celery.py`) | Processamento assíncrono de webhooks (com fallback síncrono `CELERY_TASK_ALWAYS_EAGER`) e rotina diária às 06:00 |
+| **Segurança & Cofre** | **Cryptography (Fernet / SHA-256 + HMAC) + Single-Tenant Auth** | Criptografia de credenciais (`CredentialEntry`) e middleware de proteção global (`CommandCenterAuthMiddleware`) |
 | **IA & Voz (Custo Zero)** | **Web Speech API + MediaRecorder + Gemini 2.5 Flash REST** | Ditado PT-BR ilimitado no browser e decomposição multimodal de áudio/subtarefas com 3 travas rígidas de cota |
 | **Conector WhatsApp** | **Node.js + `whatsapp-web.js` (`whatsapp_relay/`)** | Microsserviço local opcional que escuta `message_create` no próprio WhatsApp e encaminha comandos/áudios |
+| **Produção & Deploy VPS** | **Gunicorn 23 + WhiteNoise 6 + PM2 (`ecosystem.config.js`)** | Servidor WSGI em `127.0.0.1:8005`, arquivos estáticos comprimidos e script `./deploy.sh` |
 
 ---
 
@@ -38,20 +40,23 @@ Elimina a dispersão de contexto entre múltiplas frentes de trabalho (**WSA Cre
 ```text
 Command Center (Dev & Ops Portal)/
 ├── manage.py                          # Entrypoint CLI do Django
-├── requirements.txt                   # Dependências Python (Django 5, django-ninja, celery, redis, psycopg)
+├── requirements.txt                   # Dependências Python (Django 5, django-ninja, celery, redis, psycopg, cryptography, gunicorn, whitenoise)
 ├── .env.example                       # Template de variáveis de ambiente
+├── ecosystem.config.js                # Orquestração PM2 na VPS (cc-web na porta 8005, cc-celery-worker, cc-celery-beat)
+├── deploy.sh                          # Script automatizado de deploy na VPS Ubuntu (/var/www/command-center)
 ├── config/                            # Configuração central do projeto Django
-│   ├── settings.py                    # Configuração DB (dj-database-url), Celery, Tokens e Chaves API
-│   ├── urls.py                        # Roteador raiz (/admin/, /api/, /timetracker/, /)
+│   ├── settings.py                    # Configuração DB (dj-database-url), WhiteNoise, Celery, Auth Guard, Tokens e Chaves API
+│   ├── urls.py                        # Roteador raiz (/login/, /logout/, /admin/, /api/, /timetracker/, /)
 │   ├── celery.py                      # Instância Celery + Beat Schedule (06:00 daily priority recalculation)
 │   ├── wsgi.py / asgi.py              # Entrypoints de produção
 ├── apps/
-│   ├── core/                          # Entidades estruturais, parsers e serviços transversais
+│   ├── core/                          # Entidades estruturais, parsers, segurança e serviços transversais
 │   │   ├── models.py                  # Workspace, Project, TeamMember, SystemIntegrationConfig, CredentialEntry (Vault)
+│   │   ├── middleware.py              # CommandCenterAuthMiddleware (Single-Tenant Guard quando REQUIRE_AUTH=True)
 │   │   ├── services.py                # Command Parser (Ctrl+K) + Motor Dual Sync (Gemini JSON / Multi-line / 1-line)
 │   │   ├── voice_service.py           # Motor de Voz PT-BR, Gemini 2.5 Flash Audio REST, Fetcher Evolution API e Travas 1-3
 │   │   ├── admin.py                   # Registro no Django Admin
-│   │   ├── tests.py                   # Suíte completa com 21 testes integrados (Fases 1 a 8)
+│   │   ├── tests.py                   # Suíte completa com 22 testes integrados (Fases 1 a 9)
 │   │   └── management/commands/
 │   │       └── seed_command_center.py # Popula 5 Workspaces, 6 Projetos, 4 TeamMembers, 8 Tasks e 4 Credenciais no Cofre
 │   ├── tasks/                         # Domínio principal de Tarefas, Subtarefas e Views HTMX
@@ -72,6 +77,7 @@ Command Center (Dev & Ops Portal)/
 │       └── tactile-ds.css             # Folha de estilos mestre do Tactile / Soft-Neumorphic Design System
 ├── templates/                         # Templates SSR + Fragmentos HTMX
 │   ├── base.html                      # Shell global: Sidebar, Header, Barra Ctrl+K, Ditado, Modal Áudio IA, Alpine root
+│   ├── login.html                     # Tela de Login Tátil do Single-Tenant Guard (/login/)
 │   ├── dashboard.html                 # Wrapper da view principal que inclui partials/dashboard_content.html
 │   └── partials/                      # Componentes modulares atualizados via HTMX
 │       ├── dashboard_content.html     # Orquestrador central das 8 visões + Swaps OOB (Out-of-Band)
@@ -89,7 +95,7 @@ Command Center (Dev & Ops Portal)/
 │       ├── command_bar_tags.html      # Pílulas de sugestão abaixo do input Ctrl+K
 │       ├── analytics_view.html        # Visão Pulso & Métricas (barras de horas por Frente/Projeto e histórico)
 │       ├── integrations_view.html     # Visão Integrações & Logs (Sync Gemini, Travas de Voz/Cota, Tabela de Webhooks)
-│       ├── vault_view.html            # Visão Cofre & Senhas (/?view=vault): Credenciais criptografadas por Frente/Projeto
+│       ├── vault_view.html            # Visão Cofre & Senhas (/?view=vault): Alternância Grade (Cards) / Lista Compacta
 │       ├── settings_view.html         # Visão Gestão & Cadastros (CRUD de Frentes, Projetos/Lojas e Equipe)
 │       └── styleguide_view.html       # Documentação viva e interativa do Tactile Design System (/?view=styleguide)
 └── whatsapp_relay/                    # Conector Node.js standalone para WhatsApp Web
@@ -177,13 +183,14 @@ flowchart LR
 - **Onde reside:** `apps/timetracker/views.py` (`start_timer_view`, `stop_timer_view`, `add_manual_time_view`).
 - **Exclusividade Atômica:** Ao dar Play em uma tarefa (`POST /timetracker/start/<task_id>/`), dentro de `transaction.atomic()` com `select_for_update()`, o sistema pausa qualquer outro `TimeLog` ativo (`running_log.stop()`), move a tarefa anterior de `doing` para `todo`, muda a nova tarefa para `doing` e inicia um novo `TimeLog(is_running=True)`.
 
-### Fluxo 6: Cofre de Credenciais & Acessos Criptografado (`Vault` — Fase 8)
+### Fluxo 6: Cofre de Credenciais & Acessos Criptografado (`Vault` — Fase 8 & 8.1)
 - **Onde reside:** `apps/core/models.py` (`CredentialEntry`, `encrypt_vault_secret()`, `decrypt_vault_secret()`), `apps/tasks/views.py` (`vault_credential_save_view`, `vault_credential_delete_view`, `vault_credential_secret_view`) e `templates/partials/vault_view.html`.
 - **Criptografia Simétrica Autenticada (`Fernet` / `SHA-256 + HMAC`):**
   - `CredentialEntry.set_secret(raw_secret)` criptografa a senha antes de persistir em `encrypted_secret` usando chave de 32 bytes derivada de `VAULT_ENCRYPTION_KEY` (ou fallback determinístico via `hashlib.sha256(settings.SECRET_KEY)` + `base64.urlsafe_b64encode`).
   - `CredentialEntry.get_secret()` descriptografa o token sob demanda.
-- **Zero Senhas Expostas no DOM Inicial:**
-  - A visão `/?view=vault` renderiza apenas `••••••••••••••` no HTML estático. Quando o usuário clica em `👁 Ver` ou `📋 Senha`, o componente Alpine.js requisita `GET /vault/<pk>/secret/` via `fetch()` para revelar ou copiar o segredo na área de transferência.
+- **Zero Senhas Expostas no DOM Inicial & Alternância Grade / Lista:**
+  - A visão `/?view=vault` renderiza apenas `••••••••••••••` no HTML estático, tanto na **Visualização em Grade (`#vault-grid-container`)** quanto na **Visualização em Lista Compacta (`#vault-list-container`)**, cuja preferência é persistida em `localStorage.getItem('cc-vault-layout')` (`'grid'` ou `'list'`).
+  - Quando o usuário clica em `👁 Ver` ou `📋 Senha`, o componente Alpine.js requisita `GET /vault/<pk>/secret/` via `fetch()` para revelar ou copiar o segredo na área de transferência. O formulário também inclui um gerador criptográfico de senhas fortes de 16 caracteres (`window.crypto.getRandomValues`).
 
 ---
 
@@ -329,10 +336,12 @@ Controladas pelo parâmetro `?view=` em `apps/tasks/views.py` (`dashboard_view` 
 | `settings` | `partials/settings_view.html` | Gestão & Cadastros: CRUD completo em tempo real de Frentes (`Workspace`), Projetos/Lojas (`Project`) e Equipe (`TeamMember`) |
 | `styleguide` | `partials/styleguide_view.html` | Live Style Guide interativo documentando as 5 seções do Tactile Design System |
 
-### B. Rotas Internas HTMX (`apps/tasks/urls.py` & `apps/timetracker/urls.py`)
+### B. Rotas Internas HTMX e Autenticação (`config/urls.py`, `apps/tasks/urls.py` & `apps/timetracker/urls.py`)
 
-| Método & Rota | View (`apps/tasks/views.py`) | Ação Executada |
+| Método & Rota | View (`apps/tasks/views.py` / Auth) | Ação Executada |
 | :--- | :--- | :--- |
+| `GET/POST /login/` | `LoginView` (`templates/login.html`) | Tela de login tátil do Single-Tenant Guard (`REQUIRE_AUTH=True`) |
+| `POST /logout/` | `LogoutView` | Encerra a sessão autenticada e redireciona para `/login/` |
 | `POST /tasks/command/` | `command_bar_create_view` | Cria tarefa via barra `Ctrl + K` interpretando `#slug`, `@handle`, `!top3`, `!hoje`, `/turno` |
 | `POST /tasks/gemini-paste/` | `gemini_paste_sync_view` | Sincroniza JSON ou bloco multi-linha colado da área de transferência (`⚡ Sync Gemini`) |
 | `POST /tasks/voice-dictation/` | `voice_dictation_create_view` | Cria tarefa a partir de ditado falado em PT-BR (`Web Speech API`) |
@@ -377,6 +386,7 @@ Controladas pelo parâmetro `?view=` em `apps/tasks/views.py` (`dashboard_view` 
 ```ini
 SECRET_KEY=django-insecure-...
 DEBUG=True
+REQUIRE_AUTH=False
 ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,.ngrok-free.app,.trycloudflare.com
 CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,https://*.ngrok-free.app,https://*.trycloudflare.com
 DATABASE_URL=sqlite:///db.sqlite3
