@@ -275,6 +275,7 @@ def webhook_whatsapp_evolution(request: HttpRequest):
     is_audio_event = is_direct_audio_event or is_quoted_audio
 
     raw_text, sender = extract_evolution_text_and_sender(payload)
+    remote_jid = str((data_obj.get("key") or {}).get("remoteJid") or payload.get("sender_whatsapp") or sender or "").strip()
     explicit_trigger = bool(payload.get("explicit_trigger"))
 
     # TRAVA 1: Se for evento de áudio sem gatilho explícito (/task, !cc, /gemini), bloqueia imediatamente
@@ -342,6 +343,7 @@ def webhook_whatsapp_evolution(request: HttpRequest):
             source="whatsapp",
             extra_hint=raw_text,
             sender=sender,
+            sender_whatsapp=remote_jid,
         )
         return {k: v for k, v in audio_res.items() if k != "task"}
 
@@ -352,6 +354,7 @@ def webhook_whatsapp_evolution(request: HttpRequest):
             **payload,
             "text": raw_text,
             "sender": sender,
+            "sender_whatsapp": remote_jid,
         },
         processed=False,
     )
@@ -409,6 +412,7 @@ def webhook_whatsapp_audio(request: HttpRequest):
         transcript_fallback=transcript_fallback,
         extra_hint=extra_hint,
         sender=sender,
+        sender_whatsapp=str(payload.get("sender_whatsapp") or sender or "").strip(),
     )
     # Remove o objeto model Task antes de serializar para JSON
     result_json = {k: v for k, v in result.items() if k != "task"}

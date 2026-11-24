@@ -23,12 +23,21 @@ from apps.core.permissions import (
     is_general_admin,
     user_can_access_task,
 )
-from apps.core.services import parse_and_create_task, process_gemini_or_whatsapp_sync
+from apps.core.services import (
+    _parse_reminder_datetime,
+    parse_and_create_task,
+    process_gemini_or_whatsapp_sync,
+)
 from apps.core.voice_service import (
     generate_subtasks_with_gemini,
     get_daily_audio_quota_status,
     normalize_spoken_command_ptbr,
     process_audio_with_gemini_free_tier,
+)
+from apps.core.whatsapp_service import (
+    normalize_whatsapp_number,
+    resolve_target_whatsapp,
+    send_whatsapp_text,
 )
 from apps.integrations.models import WebhookEvent
 from apps.integrations.tasks import (
@@ -37,7 +46,7 @@ from apps.integrations.tasks import (
     process_github_webhook,
     process_whatsapp_webhook,
 )
-from apps.tasks.models import SubTask, Task
+from apps.tasks.models import SubTask, Task, TaskReminder
 from apps.tasks.tasks import recalculate_daily_priorities
 from apps.timetracker.models import TimeLog
 
@@ -542,6 +551,7 @@ def build_dashboard_context(
             u_obj.effective_is_orange = eff_color.lower() == "#f97316"
             u_obj.effective_initials = eff_initials
             u_obj.effective_can_access_vault = eff_vault
+            u_obj.effective_whatsapp = profile.whatsapp_number if profile else ""
             u_obj.active_tasks_count = (
                 Task.objects.filter(Q(owner=u_obj) | Q(assignee__user=u_obj))
                 .exclude(status=Task.Status.DONE)
@@ -679,8 +689,8 @@ def render_drawer_with_oob(
         feedback_message=feedback_message,
     )
     task = (
-        Task.objects.select_related("workspace", "project", "assignee")
-        .prefetch_related("subtasks", "time_logs")
+        Task.objects.select_related("workspace", "project", "assignee", "owner")
+        .prefetch_related("subtasks", "time_logs", "reminders")
         .get(pk=task.pk)
     )
     context["drawer_task"] = task
@@ -745,7 +755,7 @@ def task_detail_drawer_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Carrega a gaveta lateral (Slide-Over) com detalhes, notas e checklist da tarefa."""
     task = get_object_or_404(
         Task.objects.select_related("workspace", "project", "assignee", "owner").prefetch_related(
-            "subtasks", "time_logs"
+            "subtasks", "time_logs", "reminders"
         ),
         pk=pk,
     )
@@ -873,6 +883,69 @@ def subtask_delete_view(request: HttpRequest, subtask_id: int) -> HttpResponse:
     task = subtask.task
     subtask.delete()
     return render_drawer_with_oob(request, task=task)
+
+
+@require_POST
+def task_reminder_add_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Agenda um novo Lembrete WhatsApp (`TaskReminder`) a partir do Slide-Over Drawer."""
+    task = get_object_or_404(Task.objects.select_related("assignee", "owner"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
+
+    raw_remind_at = request.POST.get("remind_at", "").strip()
+    raw_repeat = request.POST.get("repeat_interval_minutes", "").strip()
+    custom_message = request.POST.get("custom_message", "").strip()[:255]
+    raw_target = request.POST.get("target_whatsapp", "").strip()
+
+    remind_dt = _parse_reminder_datetime(raw_remind_at)
+    if remind_dt is None:
+        return render_drawer_with_oob(
+            request,
+            task=task,
+            feedback_message="Informe uma data e horário válidos para o lembrete.",
+        )
+
+    repeat_mins = None
+    if raw_repeat.isdigit() and int(raw_repeat) > 0:
+        repeat_mins = int(raw_repeat)
+
+    target_wa = normalize_whatsapp_number(raw_target) or resolve_target_whatsapp(task)
+    rem_user = request.user if request.user.is_authenticated else task.owner
+
+    rem = TaskReminder.objects.create(
+        task=task,
+        user=rem_user,
+        target_whatsapp=target_wa,
+        remind_at=remind_dt,
+        repeat_interval_minutes=repeat_mins,
+        custom_message=custom_message,
+        is_active=True,
+    )
+    local_dt = timezone.localtime(rem.remind_at)
+    return render_drawer_with_oob(
+        request,
+        task=task,
+        feedback_message=f"⏰ Lembrete WhatsApp agendado para {local_dt:%d/%m às %H:%M} ({rem.repeat_label}).",
+    )
+
+
+@require_POST
+def task_reminder_delete_view(request: HttpRequest, reminder_id: int) -> HttpResponse:
+    """Cancela/remove um `TaskReminder` a partir do Slide-Over Drawer."""
+    reminder = get_object_or_404(
+        TaskReminder.objects.select_related("task", "task__assignee", "task__owner"),
+        pk=reminder_id,
+    )
+    if not user_can_access_task(request.user, reminder.task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
+
+    task = reminder.task
+    reminder.delete()
+    return render_drawer_with_oob(
+        request,
+        task=task,
+        feedback_message="Lembrete WhatsApp removido da tarefa.",
+    )
 
 
 # --- FEATURE 2: DRAG-AND-DROP INTERATIVO (SORTABLEJS) ---
@@ -1547,6 +1620,16 @@ def audio_quota_config_save_view(request: HttpRequest) -> HttpResponse:
             feedback_level="info" if config.ai_audio_enabled else "warning",
         )
 
+    if "toggle_whatsapp_notifications" in request.POST:
+        config.whatsapp_notifications_enabled = not config.whatsapp_notifications_enabled
+        config.save(update_fields=["whatsapp_notifications_enabled", "updated_at"])
+        state = "ATIVADAS" if config.whatsapp_notifications_enabled else "PAUSADAS (Kill-Switch)"
+        return render_dashboard_or_partial(
+            request,
+            feedback_message=f"🔔 Notificações e Lembretes WhatsApp {state}.",
+            feedback_level="info" if config.whatsapp_notifications_enabled else "warning",
+        )
+
     if "gemini_api_key" in request.POST:
         raw_key = request.POST.get("gemini_api_key", "").strip()
         if raw_key == "__CLEAR__":
@@ -1578,6 +1661,18 @@ def audio_quota_config_save_view(request: HttpRequest) -> HttpResponse:
         elif raw_evo_key:
             config.evolution_api_key = raw_evo_key[:255]
 
+    if "default_whatsapp_number" in request.POST:
+        config.default_whatsapp_number = normalize_whatsapp_number(
+            request.POST.get("default_whatsapp_number", "")
+        )
+
+    if "whatsapp_notifications_enabled" in request.POST:
+        config.whatsapp_notifications_enabled = request.POST.get("whatsapp_notifications_enabled") in (
+            "1",
+            "true",
+            "on",
+        )
+
     config.save()
     return render_dashboard_or_partial(
         request,
@@ -1586,6 +1681,49 @@ def audio_quota_config_save_view(request: HttpRequest) -> HttpResponse:
             f"({'Ativo' if config.ai_audio_enabled else 'Pausado'})."
         ),
         feedback_level="info",
+    )
+
+
+@require_POST
+def whatsapp_test_send_view(request: HttpRequest) -> HttpResponse:
+    """Dispara uma mensagem de teste via Evolution API v2 na aba Integrações (Exclusivo Admin Geral)."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+
+    config = SystemIntegrationConfig.get_solo()
+    raw_target = request.POST.get("target_whatsapp", "").strip()
+    user_wa = ""
+    if request.user.is_authenticated and hasattr(request.user, "team_profile") and request.user.team_profile:
+        user_wa = request.user.team_profile.whatsapp_number
+
+    target_number = (
+        normalize_whatsapp_number(raw_target)
+        or normalize_whatsapp_number(config.default_whatsapp_number)
+        or normalize_whatsapp_number(user_wa)
+    )
+    if not target_number:
+        return render_dashboard_or_partial(
+            request,
+            feedback_message="Informe o WhatsApp Padrão (DDI+DDD+Número) antes de testar o envio.",
+            feedback_level="warning",
+        )
+
+    res = send_whatsapp_text(
+        target_number,
+        "🔔 *Teste de Conexão — Command Center*\nEnvio ativo Evolution API v2 e motor de lembretes operacionais!",
+    )
+    if res.get("ok"):
+        msg = f"Mensagem de teste enviada com sucesso para o WhatsApp {target_number}!"
+        level = "info"
+    else:
+        reason = res.get("error") or res.get("reason") or "Verifique URL, Instance e API Key da Evolution API."
+        msg = f"Não foi possível enviar o teste para {target_number}: {reason}"
+        level = "warning"
+
+    return render_dashboard_or_partial(
+        request,
+        feedback_message=msg,
+        feedback_level=level,
     )
 
 
@@ -1863,6 +2001,7 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
 
     username = request.POST.get("username", "").strip()[:150]
     password = request.POST.get("password", "").strip()
+    whatsapp_number = normalize_whatsapp_number(request.POST.get("whatsapp_number", ""))
     can_access_vault = request.POST.get("can_access_vault") in ("1", "true", "on")
     is_admin_flag = (
         request.POST.get("is_superuser") in ("1", "true", "on")
@@ -1962,6 +2101,8 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
             member.is_active = request.POST.get("is_active") in ("1", "true", "on")
         if "can_access_vault" in request.POST or is_admin_flag:
             member.can_access_vault = bool(can_access_vault or (member.user and member.user.is_superuser))
+        if "whatsapp_number" in request.POST:
+            member.whatsapp_number = whatsapp_number
         member.save()
 
         Task.objects.filter(assignee=member).update(assigned_to=f"@{member.handle}")
@@ -2007,6 +2148,7 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
             role=role,
             accent_color=accent_color,
             avatar_initials=avatar_initials,
+            whatsapp_number=whatsapp_number,
             can_access_vault=bool(can_access_vault or is_admin_flag),
             is_active=True,
         )
@@ -2203,6 +2345,7 @@ def user_account_save_view(request: HttpRequest) -> HttpResponse:
     username = (request.POST.get("username") or "").strip().lstrip("@")[:150]
     email = (request.POST.get("email") or "").strip()[:254]
     password = (request.POST.get("password") or "").strip()
+    whatsapp_number = normalize_whatsapp_number(request.POST.get("whatsapp_number", ""))
     accent_color = (request.POST.get("accent_color") or "#3b82f6").strip()
     if accent_color not in ("#3b82f6", "#f97316"):
         accent_color = "#3b82f6"
@@ -2302,6 +2445,8 @@ def user_account_save_view(request: HttpRequest) -> HttpResponse:
             profile.handle = handle
             profile.role = role
             profile.accent_color = accent_color
+            if "whatsapp_number" in request.POST:
+                profile.whatsapp_number = whatsapp_number
             profile.can_access_vault = bool(can_access_vault or target_user.is_superuser)
             profile.is_active = target_user.is_active
             profile.save()
@@ -2312,6 +2457,7 @@ def user_account_save_view(request: HttpRequest) -> HttpResponse:
                 handle=handle,
                 role=role,
                 accent_color=accent_color,
+                whatsapp_number=whatsapp_number,
                 can_access_vault=bool(can_access_vault or target_user.is_superuser),
                 is_active=target_user.is_active,
             )
@@ -2363,6 +2509,8 @@ def user_account_save_view(request: HttpRequest) -> HttpResponse:
             if role:
                 profile.role = role
             profile.accent_color = accent_color
+            if whatsapp_number:
+                profile.whatsapp_number = whatsapp_number
             profile.can_access_vault = bool(can_access_vault or is_superuser_flag)
             profile.is_active = is_active_flag
             profile.save()
@@ -2373,6 +2521,7 @@ def user_account_save_view(request: HttpRequest) -> HttpResponse:
                 handle=handle,
                 role=role,
                 accent_color=accent_color,
+                whatsapp_number=whatsapp_number,
                 can_access_vault=bool(can_access_vault or is_superuser_flag),
                 is_active=is_active_flag,
             )

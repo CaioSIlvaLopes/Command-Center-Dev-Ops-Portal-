@@ -188,6 +188,112 @@
                 </div>
             </div>
 
+            <!-- Seção 2.5: Lembretes WhatsApp (Únicos ou Recorrentes via Evolution API v2) -->
+            <div class="ds-layer-inset ds-r-16 p-4 space-y-3 min-w-0">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider ds-text-primary">
+                        &#9200; Lembretes WhatsApp
+                    </span>
+                    <span class="ds-badge ds-badge-urgent">
+                        Evolution API v2 &bull; Celery Beat
+                    </span>
+                </div>
+
+                <!-- Lista de Lembretes Ativos / Enviados da Tarefa -->
+                <div class="space-y-2">
+                    {% for rem in drawer_task.reminders.all %}
+                    <div class="flex items-center justify-between gap-2 px-3 py-2 ds-layer-raised ds-r-12 min-w-0 {% if not rem.is_active %}opacity-65{% endif %}">
+                        <div class="min-w-0 space-y-0.5">
+                            <div class="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+                                <span class="font-bold {% if rem.is_active %}ds-urgent-text{% else %}ds-text-secondary{% endif %}">
+                                    {{ rem.remind_at|date:"d/m/Y H:i" }}
+                                </span>
+                                <span class="ds-badge {% if rem.repeat_interval_minutes %}ds-badge-urgent{% else %}ds-badge-primary{% endif %}">
+                                    {{ rem.repeat_label }}
+                                </span>
+                                {% if rem.is_sent and not rem.is_active %}
+                                <span class="ds-badge ds-badge-neutral">Enviado ({{ rem.attempts_sent }}x)</span>
+                                {% elif not rem.is_active %}
+                                <span class="ds-badge ds-badge-neutral">Inativo</span>
+                                {% elif rem.attempts_sent > 0 %}
+                                <span class="ds-badge ds-badge-neutral">{{ rem.attempts_sent }}/{{ rem.max_repeats }}</span>
+                                {% endif %}
+                            </div>
+                            {% if rem.custom_message %}
+                            <p class="text-[11px] ds-text-secondary truncate">
+                                {{ rem.custom_message }}
+                            </p>
+                            {% endif %}
+                        </div>
+
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:reminder_delete' rem.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                            hx-target="#task-drawer-container"
+                            hx-swap="innerHTML"
+                            class="px-2 py-0.5 ds-btn-tactile ds-r-8 text-xs font-mono ds-urgent-text shrink-0"
+                            title="Cancelar / Excluir Lembrete"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                    {% empty %}
+                    <p class="text-xs ds-text-secondary italic">
+                        Nenhum lembrete WhatsApp agendado para esta tarefa.
+                    </p>
+                    {% endfor %}
+                </div>
+
+                <!-- Mini-Formulário Tátil para Novo Lembrete WhatsApp -->
+                <form
+                    hx-post="{% url 'tasks:reminder_add' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+                    hx-target="#task-drawer-container"
+                    hx-swap="innerHTML"
+                    class="pt-2 border-t space-y-2.5 min-w-0"
+                    style="border-color: var(--ds-border-subtle);"
+                >
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Data &amp; Hora *</label>
+                            <input
+                                type="datetime-local"
+                                name="remind_at"
+                                required
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Repetição</label>
+                            <select
+                                name="repeat_interval_minutes"
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                            >
+                                <option value="">Apenas 1x</option>
+                                <option value="30">A cada 30 min</option>
+                                <option value="60">A cada 1h</option>
+                                <option value="120">A cada 2h</option>
+                                <option value="1440">Diário (24h)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                            type="text"
+                            name="custom_message"
+                            placeholder="Nota opcional (ex: Conferir deploy ou cobrar retorno)..."
+                            class="flex-1 min-w-0 ds-input ds-layer-raised ds-r-12 px-3 py-1.5 text-xs ds-text-primary"
+                        />
+                        <button
+                            type="submit"
+                            class="px-3.5 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold shrink-0"
+                        >
+                            + Agendar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
             <!-- Seção 3: Formulário de Edição Completa da Tarefa e Notas (Grids Responsivos grid-cols-1 sm:grid-cols-2) -->
             <form
                 hx-post="{% url 'tasks:update_detail' drawer_task.id %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"

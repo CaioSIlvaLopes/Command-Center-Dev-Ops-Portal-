@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.core.models import Project, SystemIntegrationConfig, TeamMember, Workspace
 from apps.core.services import process_gemini_or_whatsapp_sync
+from apps.core.whatsapp_service import send_task_creation_confirmation
 from apps.integrations.models import WebhookEvent
 from apps.tasks.models import SubTask, Task
 
@@ -210,13 +211,24 @@ def _call_gemini_multimodal_audio_api(
     proj_list = ", ".join([f"{p.name} [#{p.workspace.slug}]" for p in Project.objects.filter(is_active=True)])
     team_list = ", ".join([f"@{m.handle} ({m.name})" for m in TeamMember.objects.filter(is_active=True)])
 
+    local_now = timezone.localtime(timezone.now())
+    weekdays_pt = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    weekday_name = weekdays_pt[local_now.weekday()]
+    now_iso = local_now.strftime("%Y-%m-%dT%H:%M:%S%z")
+    if len(now_iso) > 22 and now_iso[-5] in ("+", "-"):
+        now_iso = f"{now_iso[:-2]}:{now_iso[-2:]}"
+
     prompt = (
         "Você é o assistente de operações do Command Center. Ouça este áudio e extraia uma tarefa "
         "estruturada em JSON estrito com as chaves: "
         '{"action": "upsert", "title": "...", "workspace": "...", "project": "...", '
         '"assignee": "...", "shift": "morning|afternoon|night", "impact": 1..5, "urgency": 1..5, '
         '"is_top_three": false, "minutes_spent": 0, "notes": "Resumo do áudio...", '
-        '"subtasks": ["Passo 1", "Passo 2"]}.\n'
+        '"subtasks": ["Passo 1", "Passo 2"], '
+        '"reminders": [{"remind_at": "YYYY-MM-DDTHH:MM:SS-03:00", "repeat_interval_minutes": null, "custom_message": ""}]}.\n'
+        f"Data/Hora Local Atual Exata: {now_iso} ({weekday_name}, fuso America/Sao_Paulo -03:00).\n"
+        "Se o usuário pedir lembretes relativos (ex: 'me avisa 1 hora antes das 17h', 'hoje às 16h', "
+        "'amanhã às 9h', 'me lembra a cada 2 horas até concluir'), converta para ISO-8601 com offset -03:00 em `reminders`.\n"
         f"Workspaces disponíveis: {ws_list}.\n"
         f"Projetos disponíveis: {proj_list}.\n"
         f"Equipe disponível: {team_list}.\n"
@@ -289,6 +301,7 @@ def process_audio_with_gemini_free_tier(
     extra_hint: str = "",
     current_workspace_slug: Optional[str] = None,
     sender: str = "",
+    sender_whatsapp: str = "",
     owner=None,
 ) -> dict:
     """
@@ -347,12 +360,15 @@ def process_audio_with_gemini_free_tier(
         except Exception:
             gemini_json = None
 
+    effective_sender_wa = (sender_whatsapp or sender or "").strip()
+
     if gemini_json:
         sync_result = process_gemini_or_whatsapp_sync(
             raw_input=gemini_json,
             source=source,
             current_workspace_slug=current_workspace_slug,
             sender=sender,
+            sender_whatsapp=effective_sender_wa,
             owner=owner,
         )
     else:
@@ -366,6 +382,7 @@ def process_audio_with_gemini_free_tier(
             source=source,
             current_workspace_slug=current_workspace_slug,
             sender=sender,
+            sender_whatsapp=effective_sender_wa,
             owner=owner,
         )
         task = sync_result["task"]
@@ -380,6 +397,16 @@ def process_audio_with_gemini_free_tier(
             sync_result["subtasks_created"] = len(default_sts)
 
     task = sync_result["task"]
+    if source == "whatsapp":
+        try:
+            send_task_creation_confirmation(
+                task,
+                reminders=sync_result.get("reminders"),
+                target_number=effective_sender_wa,
+            )
+        except Exception:
+            pass
+
     ev_source = (
         WebhookEvent.Source.WHATSAPP
         if source == "whatsapp"
@@ -414,6 +441,7 @@ def process_audio_with_gemini_free_tier(
         "project": sync_result["project"],
         "assignee": sync_result["assignee"],
         "subtasks_created": sync_result["subtasks_created"],
+        "reminders_created": sync_result.get("reminders_created", 0),
         "minutes_logged": sync_result["minutes_logged"],
         "priority_score": task.priority_score,
         "used_today": updated_quota["used_today"],

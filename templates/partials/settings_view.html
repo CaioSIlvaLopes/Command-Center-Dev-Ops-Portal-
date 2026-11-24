@@ -694,7 +694,7 @@
                     <span class="block text-[10px] font-mono uppercase tracking-wider ds-urgent-text font-bold">
                         Login de Acesso &amp; Permissões (Opcional)
                     </span>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <div>
                             <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Usuário de Login (username)</label>
                             <input
@@ -712,6 +712,15 @@
                                 name="password"
                                 autocomplete="new-password"
                                 placeholder="Obrigatória ao criar login"
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">WhatsApp (DDI+DDD)</label>
+                            <input
+                                type="text"
+                                name="whatsapp_number"
+                                placeholder="Ex: 5521999999999"
                                 class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
                             />
                         </div>
@@ -815,6 +824,9 @@
                                     {% else %}
                                     &bull; <span class="opacity-75">Sem login</span>
                                     {% endif %}
+                                    {% if member.whatsapp_number %}
+                                    &bull; WA: <span class="ds-urgent-text">{{ member.whatsapp_number }}</span>
+                                    {% endif %}
                                     &bull; <strong class="ds-text-primary">{{ member.active_tasks_count|default:0 }}</strong> ativas
                                 </p>
                             </div>
@@ -901,7 +913,7 @@
                             />
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <input
                                 type="text"
                                 name="username"
@@ -916,6 +928,13 @@
                                 autocomplete="new-password"
                                 class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
                                 placeholder="{% if member.user %}Nova senha (vazio = manter){% else %}Senha para criar login{% endif %}"
+                            />
+                            <input
+                                type="text"
+                                name="whatsapp_number"
+                                value="{{ member.whatsapp_number|default:'' }}"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="WhatsApp (5521...)"
                             />
                         </div>
 

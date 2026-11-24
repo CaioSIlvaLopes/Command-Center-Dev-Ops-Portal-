@@ -1415,6 +1415,199 @@ class CommandCenterTests(TestCase):
         admin_user.refresh_from_db()
         self.assertTrue(admin_user.is_active)
 
+    def test_phase12_whatsapp_reminders_gemini_extraction_celery_dispatch_drawer_and_auto_cancel(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+        from apps.core.models import SystemIntegrationConfig
+        from apps.tasks.models import TaskReminder
+        from apps.tasks.tasks import dispatch_due_reminders
+
+        config = SystemIntegrationConfig.get_solo()
+        config.evolution_api_url = "http://127.0.0.1:8080"
+        config.evolution_api_key = "evo-test-key-2026"
+        config.evolution_instance_name = "cc-prod-instance"
+        config.default_whatsapp_number = "5521999998888"
+        config.whatsapp_notifications_enabled = True
+        config.save()
+
+        admin_user = User.objects.create_superuser(
+            username="caio_wa_admin",
+            email="caio@wsacreative.com.br",
+            password="AdminWaPassword2026!",
+        )
+        owner_user = User.objects.create_user(
+            username="henrique_wa",
+            email="henrique@wsacreative.com.br",
+            password="HenriqueWaPassword2026!",
+        )
+        other_user = User.objects.create_user(
+            username="intruso_wa",
+            email="intruso@wsacreative.com.br",
+            password="IntrusoWaPassword2026!",
+        )
+
+        member_henrique = TeamMember.objects.get(handle="henrique")
+        member_henrique.user = owner_user
+        member_henrique.whatsapp_number = "5521988887777"
+        member_henrique.save()
+
+        # 1. Criação de tarefa via WhatsApp/Áudio JSON contendo `reminders` cria TaskReminder
+        #    no banco e dispara confirmação automática via Evolution API v2
+        remind_iso = (timezone.localtime(timezone.now()) - timedelta(minutes=2)).strftime(
+            "%Y-%m-%dT%H:%M:%S-03:00"
+        )
+        gemini_payload = {
+            "action": "upsert",
+            "title": "Subir campanha Black Friday no Portal MS CREW",
+            "workspace": "wsa",
+            "project": "Portal MS CREW",
+            "assignee": "henrique",
+            "shift": "afternoon",
+            "impact": 5,
+            "urgency": 5,
+            "is_top_three": True,
+            "notes": "Áudio com pedido de lembrete periódico a cada 60 min.",
+            "reminders": [
+                {
+                    "remind_at": remind_iso,
+                    "repeat_interval_minutes": 60,
+                    "max_repeats": 2,
+                    "custom_message": "Conferir aprovação dos criativos",
+                }
+            ],
+        }
+
+        with patch("apps.core.whatsapp_service.send_whatsapp_text") as mock_send_wa:
+            mock_send_wa.return_value = {"ok": True, "number": "5521988887777"}
+            resp_wh = self.client.post(
+                "/api/webhooks/whatsapp",
+                data=json.dumps(
+                    {
+                        "text": json.dumps(gemini_payload),
+                        "sender": "5521988887777@s.whatsapp.net",
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(resp_wh.status_code, 200)
+            self.assertTrue(mock_send_wa.called)
+            confirm_num, confirm_text = mock_send_wa.call_args[0]
+            self.assertEqual(confirm_num, "5521988887777")
+            self.assertIn("Subir campanha Black Friday no Portal MS CREW", confirm_text)
+            self.assertIn("Lembretes Agendados", confirm_text)
+
+        created_task = Task.objects.filter(
+            title="Subir campanha Black Friday no Portal MS CREW"
+        ).first()
+        self.assertIsNotNone(created_task)
+        self.assertEqual(created_task.owner, owner_user)
+
+        reminder = TaskReminder.objects.filter(task=created_task).first()
+        self.assertIsNotNone(reminder)
+        self.assertTrue(reminder.is_active)
+        self.assertEqual(reminder.repeat_interval_minutes, 60)
+        self.assertEqual(reminder.max_repeats, 2)
+        self.assertEqual(reminder.target_whatsapp, "5521988887777")
+
+        # 2. dispatch_due_reminders() envia lembrete vencido, reagenda periódico e desativa ao atingir max_repeats
+        fixed_daytime = timezone.localtime(timezone.now()).replace(
+            hour=14, minute=30, second=0, microsecond=0
+        )
+        reminder.remind_at = fixed_daytime - timedelta(minutes=5)
+        reminder.save(update_fields=["remind_at"])
+
+        with (
+            patch("apps.tasks.tasks.timezone.now", return_value=fixed_daytime),
+            patch("apps.tasks.tasks.send_whatsapp_text") as mock_dispatch_send,
+        ):
+            mock_dispatch_send.return_value = {"ok": True, "number": "5521988887777"}
+
+            # 1º disparo (1/2) -> envia e reagenda (+60m), permanecendo ativo
+            res1 = dispatch_due_reminders()
+            self.assertEqual(res1["sent"], 1)
+            self.assertEqual(res1["rescheduled"], 1)
+            reminder.refresh_from_db()
+            self.assertEqual(reminder.attempts_sent, 1)
+            self.assertTrue(reminder.is_active)
+            self.assertFalse(reminder.is_sent)
+            self.assertGreater(reminder.remind_at, fixed_daytime)
+
+            # Retrocede remind_at para forçar o 2º disparo (2/2 == max_repeats) -> desativa e marca is_sent=True
+            reminder.remind_at = fixed_daytime - timedelta(minutes=1)
+            reminder.save(update_fields=["remind_at"])
+            res2 = dispatch_due_reminders()
+            self.assertEqual(res2["sent"], 1)
+            self.assertEqual(res2["rescheduled"], 0)
+            reminder.refresh_from_db()
+            self.assertEqual(reminder.attempts_sent, 2)
+            self.assertFalse(reminder.is_active)
+            self.assertTrue(reminder.is_sent)
+
+        # 3. Endpoints manuais do Drawer (/tasks/<pk>/reminders/add/ e /delete/) + Anti-IDOR (403)
+        self.client.force_login(other_user)
+        resp_idor_add = self.client.post(
+            f"/tasks/{created_task.id}/reminders/add/",
+            {"remind_at": "2026-11-25T10:00", "repeat_interval_minutes": "30"},
+        )
+        self.assertEqual(resp_idor_add.status_code, 403)
+
+        self.client.force_login(owner_user)
+        resp_owner_add = self.client.post(
+            f"/tasks/{created_task.id}/reminders/add/",
+            {
+                "remind_at": "2026-11-25T10:00",
+                "repeat_interval_minutes": "30",
+                "custom_message": "Lembrete manual criado pelo Drawer",
+            },
+        )
+        self.assertEqual(resp_owner_add.status_code, 200)
+        manual_rem = TaskReminder.objects.filter(
+            task=created_task,
+            custom_message="Lembrete manual criado pelo Drawer",
+        ).first()
+        self.assertIsNotNone(manual_rem)
+        self.assertEqual(manual_rem.repeat_interval_minutes, 30)
+        self.assertTrue(manual_rem.is_active)
+
+        # Intruso tentando deletar o lembrete manual recebe 403
+        self.client.force_login(other_user)
+        self.assertEqual(
+            self.client.post(f"/tasks/reminders/{manual_rem.id}/delete/").status_code,
+            403,
+        )
+
+        # Dono cria um segundo lembrete e exclui o primeiro pelo endpoint
+        self.client.force_login(owner_user)
+        second_rem = TaskReminder.objects.create(
+            task=created_task,
+            user=owner_user,
+            target_whatsapp="5521988887777",
+            remind_at=timezone.now() + timedelta(hours=2),
+            is_active=True,
+        )
+        resp_del_rem = self.client.post(f"/tasks/reminders/{manual_rem.id}/delete/")
+        self.assertEqual(resp_del_rem.status_code, 200)
+        self.assertFalse(TaskReminder.objects.filter(pk=manual_rem.id).exists())
+
+        # 4. Concluir a tarefa (status="done") desativa automaticamente todos os TaskReminder pendentes
+        self.assertTrue(second_rem.is_active)
+        created_task.status = Task.Status.DONE
+        created_task.save()
+        second_rem.refresh_from_db()
+        self.assertFalse(second_rem.is_active)
+
+        # 5. Verificação estrita de zero cores proibidas nos templates atualizados
+        self.client.force_login(admin_user)
+        drawer_html = self.client.get(f"/tasks/{created_task.id}/detail/").content.decode("utf-8")
+        users_html = self.client.get("/?view=users").content.decode("utf-8")
+        integrations_html = self.client.get("/?view=integrations").content.decode("utf-8")
+        forbidden = ["purple", "violet", "indigo", "emerald", "teal", "bg-green", "text-green"]
+        for doc in (drawer_html, users_html, integrations_html):
+            for word in forbidden:
+                self.assertNotIn(word, doc.lower())
+
 
 
 

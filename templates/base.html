@@ -344,7 +344,7 @@
                 <button
                     type="button"
                     id="btn-open-command-modal"
-                    @click="openCommandModal()"
+                    @click.stop="openCommandModal()"
                     class="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold shrink-0 transition order-last lg:order-none"
                     title="Capturar Nova Tarefa Rápida (Atalho: Ctrl+K)"
                 >
@@ -365,7 +365,7 @@
                 <button
                     type="button"
                     id="btn-audio-ia-modal"
-                    @click="audioModalOpen = true"
+                    @click.stop="audioModalOpen = true"
                     class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 ds-btn-tactile ds-r-12 text-xs font-mono font-semibold ds-accent-text shrink-0 transition"
                     title="Gravar ou Enviar Áudio IA com Trava de Cota Diária ({{ audio_quota.used_today|default:0 }}/{{ audio_quota.max_daily|default:20 }} hoje)"
                 >
@@ -435,12 +435,11 @@
         id="open-command-bar-modal"
         x-show="commandModalOpen"
         x-cloak
-        x-transition.opacity
         @click.self="commandModalOpen = false"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
     >
         <div
-            @click.outside="commandModalOpen = false"
+            @click.stop
             class="w-[calc(100%-2rem)] max-w-2xl mx-4 ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4 min-w-0"
         >
             <!-- Cabeçalho do Modal -->
@@ -542,10 +541,11 @@
         id="open-gemini-paste-modal"
         x-show="geminiModalOpen"
         x-cloak
+        @click.self="geminiModalOpen = false"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
     >
         <div
-            @click.outside="geminiModalOpen = false"
+            @click.stop
             class="w-full max-w-xl ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4"
         >
             <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
@@ -628,10 +628,11 @@
         id="open-audio-ia-modal"
         x-show="audioModalOpen"
         x-cloak
+        @click.self="audioModalOpen = false"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
     >
         <div
-            @click.outside="audioModalOpen = false"
+            @click.stop
             class="w-full max-w-lg ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4"
         >
             <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">

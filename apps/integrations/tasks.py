@@ -13,6 +13,7 @@ from apps.core.services import (
     TODAY_TAG_RE,
     TOP3_TAG_RE,
 )
+from apps.core.whatsapp_service import send_task_creation_confirmation
 from apps.integrations.models import WebhookEvent
 from apps.tasks.models import Task
 from apps.timetracker.models import TimeLog
@@ -70,18 +71,33 @@ def resolve_github_project(repo_name: str, full_name: str = ""):
     return None
 
 
+def extract_evolution_sender_jid(payload: dict) -> str:
+    """Extrai o remoteJid / número bruto do remetente do payload da Evolution API v2."""
+    data = payload.get("data") or {}
+    if isinstance(data, list) and data:
+        data = data[0]
+    return (
+        (data.get("key") or {}).get("remoteJid")
+        or payload.get("sender_whatsapp")
+        or payload.get("sender")
+        or ""
+    ).strip()
+
+
 @shared_task(name="apps.integrations.tasks.process_whatsapp_webhook")
 def process_whatsapp_webhook(event_id: int) -> dict:
     """
     Processa evento de webhook do WhatsApp (Conector Node.js ou Evolution API):
     - Suporta comandos rápidos de 1 linha (`/task`, `!cc`, `/gemini`) E blocos multi-linha
-      colados do Gemini (com `Projeto:`, `Tempo:`, `- [ ]` subtarefas e `Notas:`).
+      colados do Gemini (com `Projeto:`, `Tempo:`, `Lembrete:`, `- [ ]` subtarefas e `Notas:`).
+    - Dispara confirmação automática no WhatsApp após criar a tarefa e lembretes.
     """
     event = WebhookEvent.objects.get(pk=event_id)
     try:
         payload = event.payload or {}
         raw_text = payload.get("text", "").strip()
         sender = payload.get("sender", "").strip()
+        sender_whatsapp = extract_evolution_sender_jid(payload)
 
         if not raw_text and "data" in payload:
             raw_text, evo_sender = extract_evolution_text_and_sender(payload)
@@ -92,6 +108,7 @@ def process_whatsapp_webhook(event_id: int) -> dict:
             raw_input=raw_text,
             source="whatsapp",
             sender=sender,
+            sender_whatsapp=sender_whatsapp or sender,
         )
         task = sync_result["task"]
 
@@ -99,6 +116,16 @@ def process_whatsapp_webhook(event_id: int) -> dict:
         event.processed = True
         event.error_message = ""
         event.save(update_fields=["created_task", "processed", "error_message"])
+
+        try:
+            send_task_creation_confirmation(
+                task,
+                reminders=sync_result.get("reminders"),
+                target_number=sender_whatsapp or sender,
+            )
+        except Exception:
+            pass
+
         return {
             "event_id": event.id,
             "task_id": task.id,
@@ -106,6 +133,7 @@ def process_whatsapp_webhook(event_id: int) -> dict:
             "workspace": task.workspace.slug,
             "priority_score": task.priority_score,
             "subtasks_created": sync_result["subtasks_created"],
+            "reminders_created": sync_result.get("reminders_created", 0),
             "minutes_logged": sync_result["minutes_logged"],
         }
     except Exception as exc:

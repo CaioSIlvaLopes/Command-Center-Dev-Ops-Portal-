@@ -10,6 +10,7 @@
         formRole: '',
         formUsername: '',
         formEmail: '',
+        formWhatsapp: '',
         formPassword: '',
         formShowPassword: false,
         formAccentColor: '#3b82f6',
@@ -26,6 +27,7 @@
             this.formRole = '';
             this.formUsername = '';
             this.formEmail = '';
+            this.formWhatsapp = '';
             this.formPassword = '';
             this.formShowPassword = false;
             this.formAccentColor = '#3b82f6';
@@ -36,6 +38,10 @@
             this.userModalOpen = true;
         },
 
+        closeUserModal() {
+            this.userModalOpen = false;
+        },
+
         openEditUserModal(u) {
             this.editUserId = u.id;
             this.formTeamMemberId = '';
@@ -44,6 +50,7 @@
             this.formRole = u.role || '';
             this.formUsername = u.username || '';
             this.formEmail = u.email || '';
+            this.formWhatsapp = u.whatsapp || '';
             this.formPassword = '';
             this.formShowPassword = false;
             this.formAccentColor = u.accentColor === '#f97316' ? '#f97316' : '#3b82f6';
@@ -124,7 +131,7 @@
             <button
                 type="button"
                 id="btn-open-new-user-modal"
-                @click="openNewUserModal()"
+                @click.stop="openNewUserModal()"
                 class="px-4 py-2.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold inline-flex items-center gap-2"
             >
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -272,6 +279,11 @@
                         {{ u.email }}
                     </span>
                     {% endif %}
+                    {% if u.effective_whatsapp %}
+                    <span class="text-[10px] ds-urgent-text truncate block" title="WhatsApp: {{ u.effective_whatsapp }}">
+                        WA: {{ u.effective_whatsapp }}
+                    </span>
+                    {% endif %}
                 </div>
 
                 <div class="min-w-0">
@@ -352,13 +364,14 @@
 
                     <button
                         type="button"
-                        @click="openEditUserModal({
+                        @click.stop="openEditUserModal({
                             id: '{{ u.id }}',
                             fullName: '{{ u.effective_name|escapejs }}',
                             handle: '{{ u.effective_handle|escapejs }}',
                             role: '{{ u.effective_role|escapejs }}',
                             username: '{{ u.username|escapejs }}',
                             email: '{{ u.email|escapejs }}',
+                            whatsapp: '{{ u.effective_whatsapp|escapejs }}',
                             accentColor: '{{ u.effective_accent_color|escapejs }}',
                             canVault: {% if u.effective_can_access_vault %}true{% else %}false{% endif %},
                             isSuperuser: {% if u.is_superuser %}true{% else %}false{% endif %},
@@ -388,12 +401,12 @@
         id="user-account-modal"
         x-show="userModalOpen"
         x-cloak
-        x-transition.opacity
-        @click.self="userModalOpen = false"
+        @click.self="closeUserModal()"
+        @keydown.escape.window="closeUserModal()"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
     >
         <div
-            @click.outside="userModalOpen = false"
+            @click.stop
             class="w-full max-w-xl ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4 my-auto min-w-0"
         >
             <!-- Cabeçalho do Modal -->
@@ -411,8 +424,9 @@
                 </div>
                 <button
                     type="button"
-                    @click="userModalOpen = false"
+                    @click.stop="closeUserModal()"
                     class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono shrink-0"
+                    title="Fechar Modal (Esc)"
                 >
                     &times;
                 </button>
@@ -423,7 +437,7 @@
                 hx-post="{% url 'tasks:user_save' %}?view=users&workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&user_filter={{ current_user_filter|default:'me' }}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
-                @htmx:after-request="if ($event.detail.successful) { userModalOpen = false; }"
+                @htmx:after-request="if ($event.detail.successful) { closeUserModal(); }"
                 class="space-y-4 min-w-0"
             >
                 <input type="hidden" name="view" value="users" />
@@ -531,8 +545,8 @@
                     </div>
                 </div>
 
-                <!-- Login (username) e E-mail -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Login (username), E-mail e WhatsApp -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                         <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
                             Login de Acesso (Username) *
@@ -556,6 +570,18 @@
                             name="email"
                             x-model="formEmail"
                             placeholder="henrique@wsacreative.com.br"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            WhatsApp (DDI+DDD+Número)
+                        </label>
+                        <input
+                            type="text"
+                            name="whatsapp_number"
+                            x-model="formWhatsapp"
+                            placeholder="Ex: 5521999999999"
                             class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
                         />
                     </div>
@@ -674,7 +700,7 @@
                 <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 pt-2">
                     <button
                         type="button"
-                        @click="userModalOpen = false"
+                        @click.stop="closeUserModal()"
                         class="px-4 py-2 ds-btn-tactile ds-r-12 text-xs font-mono"
                     >
                         Cancelar

@@ -334,9 +334,52 @@ Notas: Alinhado no chat com o Gemini para usar tokens semânticos.</pre>
                             class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
                         />
                     </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end pt-1">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                                WhatsApp Padrão p/ Lembretes (Fallback)
+                            </label>
+                            <input
+                                type="text"
+                                name="default_whatsapp_number"
+                                value="{{ integration_config.default_whatsapp_number }}"
+                                placeholder="Ex: 5521999999999"
+                                class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 px-3 py-2 ds-layer-raised ds-r-12">
+                            <span class="text-[10px] font-mono ds-text-primary font-semibold">
+                                Confirmações &amp; Lembretes Ativos
+                            </span>
+                            <button
+                                type="button"
+                                hx-post="{% url 'tasks:audio_quota_save' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                                hx-vals='{"toggle_whatsapp_notifications": "1", "view": "integrations"}'
+                                hx-target="#dashboard-content"
+                                hx-swap="innerHTML"
+                                class="ds-switch {% if integration_config.whatsapp_notifications_enabled %}is-on{% endif %}"
+                                title="Ativar ou Pausar Envio de Confirmações e Lembretes no WhatsApp"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="flex items-center justify-end gap-2 pt-1">
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <button
+                        type="button"
+                        hx-post="{% url 'tasks:whatsapp_test' %}?workspace={{ current_workspace_slug }}&view=integrations"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        class="px-3.5 py-2 ds-btn-tactile ds-r-12 text-xs font-mono ds-urgent-text font-semibold"
+                        title="Disparar mensagem de teste na Evolution API v2 para o WhatsApp Padrão"
+                    >
+                        &#128276; Testar Envio WhatsApp
+                    </button>
+
                     <button
                         type="submit"
                         class="px-4 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"

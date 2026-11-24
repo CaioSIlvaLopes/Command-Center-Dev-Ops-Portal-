@@ -167,6 +167,8 @@ class Task(models.Model):
 
         super().save(*args, **kwargs)
         self._initial_assignee_id = self.assignee_id
+        if self.status == self.Status.DONE and self.pk:
+            self.reminders.filter(is_active=True).update(is_active=False)
 
     @property
     def is_running_timer(self) -> bool:
@@ -233,3 +235,60 @@ class SubTask(models.Model):
     def __str__(self) -> str:
         check = "x" if self.is_done else " "
         return f"[{check}] {self.title}"
+
+
+class TaskReminder(models.Model):
+    """Lembrete agendado (único ou periódico) enviado via WhatsApp (Evolution API v2)."""
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="reminders",
+        verbose_name="Tarefa Principal",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="task_reminders",
+        verbose_name="Usuário",
+    )
+    target_whatsapp = models.CharField("WhatsApp de Destino", max_length=40, blank=True, default="")
+    remind_at = models.DateTimeField("Horário do Lembrete", db_index=True)
+    repeat_interval_minutes = models.PositiveIntegerField(
+        "Intervalo de Repetição (minutos)",
+        null=True,
+        blank=True,
+        help_text="Se preenchido, repete o aviso a cada X minutos até concluir a tarefa.",
+    )
+    max_repeats = models.PositiveSmallIntegerField("Limite de Repetições", default=5)
+    attempts_sent = models.PositiveSmallIntegerField("Tentativas Enviadas", default=0)
+    custom_message = models.CharField("Mensagem / Nota", max_length=255, blank=True, default="")
+    is_active = models.BooleanField("Ativo", default=True, db_index=True)
+    is_sent = models.BooleanField("Enviado / Finalizado", default=False)
+    last_sent_at = models.DateTimeField("Último Envio em", null=True, blank=True)
+    last_error = models.TextField("Último Erro", blank=True, default="")
+    created_at = models.DateTimeField("Criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Lembrete WhatsApp"
+        verbose_name_plural = "Lembretes WhatsApp"
+        ordering = ["-is_active", "remind_at", "pk"]
+
+    def __str__(self) -> str:
+        local_dt = timezone.localtime(self.remind_at) if timezone.is_aware(self.remind_at) else self.remind_at
+        return f"Lembrete: {self.task.title} ({local_dt:%d/%m %H:%M})"
+
+    @property
+    def repeat_label(self) -> str:
+        mins = self.repeat_interval_minutes
+        if not mins:
+            return "Apenas 1x"
+        if mins == 1440:
+            return "Diário (24h)"
+        if mins % 60 == 0:
+            hours = mins // 60
+            return f"A cada {hours}h"
+        return f"A cada {mins}m"
+

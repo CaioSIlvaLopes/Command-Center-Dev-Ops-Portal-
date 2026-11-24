@@ -1,12 +1,13 @@
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Optional, Union
 
 from django.utils import timezone
 
 from apps.core.models import Workspace, Project, TeamMember
-from apps.tasks.models import Task, SubTask
+from apps.core.whatsapp_service import resolve_target_whatsapp
+from apps.tasks.models import Task, SubTask, TaskReminder
 from apps.timetracker.models import TimeLog
 
 # Expressões regulares para captura rápida (Ctrl + K, WhatsApp e Gemini Sync)
@@ -280,6 +281,133 @@ def _create_subtasks_from_list(task: Task, subtasks_raw: list) -> int:
     return created_count
 
 
+def _parse_reminder_datetime(raw_val: Any) -> Optional[datetime]:
+    """
+    Interpreta datas/horários de lembretes:
+    - ISO-8601 (`2026-11-24T16:00:00-03:00` ou `2026-11-24 16:00`)
+    - Formato brasileiro (`24/11/2026 16:00` ou `24/11 16:00`)
+    - Apenas horário (`16:00` ou `16h30` -> hoje, ou amanhã se contiver 'amanha'/'amanhã')
+    Retorna um `datetime` timezone-aware no fuso local (`America/Sao_Paulo`).
+    """
+    if not raw_val:
+        return None
+    if isinstance(raw_val, datetime):
+        return timezone.make_aware(raw_val) if timezone.is_naive(raw_val) else raw_val
+
+    text = str(raw_val).strip()
+    if not text:
+        return None
+
+    tz = timezone.get_current_timezone()
+    local_now = timezone.localtime(timezone.now())
+
+    # 1. Tentativa ISO-8601 direta
+    iso_candidate = text.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(iso_candidate)
+        return timezone.make_aware(dt, tz) if timezone.is_naive(dt) else dt.astimezone(tz)
+    except ValueError:
+        pass
+
+    # 2. Formato DD/MM(/YYYY) HH:MM
+    br_match = re.search(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s+(?:[aà]s\s+)?(\d{1,2})[:h](\d{2})?", text, re.IGNORECASE)
+    if br_match:
+        day = int(br_match.group(1))
+        month = int(br_match.group(2))
+        year_raw = br_match.group(3)
+        year = int(year_raw) if year_raw else local_now.year
+        if year < 100:
+            year += 2000
+        hour = int(br_match.group(4))
+        minute = int(br_match.group(5) or 0)
+        try:
+            naive_dt = datetime(year, month, day, hour, minute)
+            return timezone.make_aware(naive_dt, tz)
+        except ValueError:
+            return None
+
+    # 3. Apenas horário (ex: "16:00", "amanhã às 09:30", "17h")
+    time_match = re.search(r"(\d{1,2})(?::(\d{2})|h(\d{2})?)\b", text, re.IGNORECASE)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or time_match.group(3) or 0)
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            base_date = local_now.date()
+            if re.search(r"\bamanh[aã]\b", text, re.IGNORECASE):
+                base_date = base_date + timedelta(days=1)
+            naive_dt = datetime(base_date.year, base_date.month, base_date.day, hour, minute)
+            aware_dt = timezone.make_aware(naive_dt, tz)
+            return aware_dt
+
+    return None
+
+
+def _parse_and_create_reminders(
+    task: Task,
+    reminders_raw: list,
+    sender_whatsapp: Optional[str] = None,
+) -> list[TaskReminder]:
+    """
+    Cria objetos `TaskReminder` vinculados à `Task` a partir de dicionários JSON do Gemini
+    ou strings de texto (`Lembrete: 24/11 16:00 a cada 60m`).
+    """
+    created_reminders: list[TaskReminder] = []
+    target_wa = resolve_target_whatsapp(task, fallback_sender=sender_whatsapp)
+
+    for item in reminders_raw or []:
+        remind_dt = None
+        repeat_mins = None
+        max_repeats = 5
+        custom_msg = ""
+
+        if isinstance(item, dict):
+            remind_dt = _parse_reminder_datetime(item.get("remind_at") or item.get("datetime") or item.get("time"))
+            raw_rep = item.get("repeat_interval_minutes") or item.get("repeat_minutes")
+            if raw_rep is not None and str(raw_rep).strip() not in ("", "null", "None", "0"):
+                try:
+                    repeat_mins = max(1, int(raw_rep))
+                except (TypeError, ValueError):
+                    repeat_mins = None
+            raw_max = item.get("max_repeats")
+            if raw_max:
+                try:
+                    max_repeats = max(1, min(50, int(raw_max)))
+                except (TypeError, ValueError):
+                    max_repeats = 5
+            custom_msg = str(item.get("custom_message") or item.get("message") or "").strip()[:255]
+        else:
+            raw_str = str(item or "").strip()
+            if not raw_str:
+                continue
+            rep_match = re.search(r"a\s+cada\s+(\d+)\s*(m(?:in(?:utos?)?)?|h(?:oras?)?)\b", raw_str, re.IGNORECASE)
+            if rep_match:
+                val = int(rep_match.group(1))
+                unit = rep_match.group(2).lower()
+                repeat_mins = val * 60 if unit.startswith("h") else val
+            elif re.search(r"\bdi[aá]rio\b", raw_str, re.IGNORECASE):
+                repeat_mins = 1440
+
+            note_parts = raw_str.split(" - ", 1)
+            if len(note_parts) == 2:
+                custom_msg = note_parts[1].strip()[:255]
+            remind_dt = _parse_reminder_datetime(note_parts[0])
+
+        if remind_dt is not None:
+            rem = TaskReminder.objects.create(
+                task=task,
+                user=task.owner,
+                target_whatsapp=target_wa,
+                remind_at=remind_dt,
+                repeat_interval_minutes=repeat_mins,
+                max_repeats=max_repeats,
+                custom_message=custom_msg,
+                is_active=True,
+            )
+            created_reminders.append(rem)
+
+    return created_reminders
+
+
 def _create_completed_timelog(task: Task, minutes: int, user: Any = None) -> Optional[TimeLog]:
     """Cria um registro TimeLog concluído caso minutes > 0."""
     minutes = int(minutes or 0)
@@ -333,6 +461,7 @@ def process_gemini_or_whatsapp_sync(
     source: str = "gemini",
     current_workspace_slug: Optional[str] = None,
     sender: str = "",
+    sender_whatsapp: Optional[str] = None,
     owner: Any = None,
 ) -> dict:
     """
@@ -372,6 +501,7 @@ def process_gemini_or_whatsapp_sync(
         )
         notes = str(json_data.get("notes") or "").strip()
         subtasks_list = json_data.get("subtasks") or []
+        reminders_list = json_data.get("reminders") or []
         external_ref = str(json_data.get("external_ref") or "").strip()[:120]
 
         project = _resolve_project_by_name(project_name) if project_name else None
@@ -447,6 +577,11 @@ def process_gemini_or_whatsapp_sync(
                 active_log.stop()
 
         subtasks_created = _create_subtasks_from_list(task, subtasks_list)
+        created_reminders = _parse_and_create_reminders(
+            task,
+            reminders_list,
+            sender_whatsapp=sender_whatsapp or sender,
+        )
         _create_completed_timelog(task, minutes_spent, user=owner)
 
         return {
@@ -460,6 +595,8 @@ def process_gemini_or_whatsapp_sync(
             "project": task.project.name if task.project else None,
             "assignee": task.assigned_to,
             "subtasks_created": subtasks_created,
+            "reminders": created_reminders,
+            "reminders_created": len(created_reminders),
             "minutes_logged": minutes_spent,
             "priority_score": task.priority_score,
         }
@@ -506,6 +643,7 @@ def process_gemini_or_whatsapp_sync(
 
     minutes_spent = 0
     subtasks_to_create = []
+    reminders_to_create = []
     notes_lines = []
     assignee_updated = False
 
@@ -523,6 +661,11 @@ def process_gemini_or_whatsapp_sync(
         time_match = re.match(r"^(?:tempo|time|minutos|dura[cç][aã]o)\s*:\s*(.+)$", line, re.IGNORECASE)
         if time_match:
             minutes_spent += _parse_duration_minutes(time_match.group(1))
+            continue
+
+        reminder_match = re.match(r"^(?:lembretes?|remind(?:er)?|aviso|alerta)\s*:\s*(.+)$", line, re.IGNORECASE)
+        if reminder_match:
+            reminders_to_create.append(reminder_match.group(1).strip())
             continue
 
         assignee_line_match = re.match(r"^(?:respons[aá]vel|assignee)\s*:\s*(.+)$", line, re.IGNORECASE)
@@ -567,6 +710,11 @@ def process_gemini_or_whatsapp_sync(
     task.save()
 
     subtasks_created = _create_subtasks_from_list(task, subtasks_to_create)
+    created_reminders = _parse_and_create_reminders(
+        task,
+        reminders_to_create,
+        sender_whatsapp=sender_whatsapp or sender,
+    )
     _create_completed_timelog(task, minutes_spent, user=owner)
 
     return {
@@ -580,6 +728,8 @@ def process_gemini_or_whatsapp_sync(
         "project": task.project.name if task.project else None,
         "assignee": task.assigned_to,
         "subtasks_created": subtasks_created,
+        "reminders": created_reminders,
+        "reminders_created": len(created_reminders),
         "minutes_logged": minutes_spent,
         "priority_score": task.priority_score,
     }

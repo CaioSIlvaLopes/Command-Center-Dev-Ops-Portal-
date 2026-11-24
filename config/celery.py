@@ -8,11 +8,15 @@ app = Celery("command_center")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
-# Rotina diária automática de recálculo de prioridades e prazos vencendo
+# Rotina diária automática de recálculo de prioridades e disparo de lembretes a cada minuto
 app.conf.beat_schedule = {
     "recalculate-daily-priorities-every-morning": {
         "task": "apps.tasks.tasks.recalculate_daily_priorities",
         "schedule": crontab(hour=6, minute=0),
+    },
+    "dispatch-due-reminders-every-minute": {
+        "task": "apps.tasks.tasks.dispatch_due_reminders",
+        "schedule": 60.0,
     },
 }
 

@@ -106,6 +106,13 @@ class TeamMember(models.Model):
         default=False,
         help_text="Permite ver, copiar, criar e editar credenciais no Cofre.",
     )
+    whatsapp_number = models.CharField(
+        "WhatsApp (DDI+DDD+Número)",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="WhatsApp com DDI+DDD, somente números. Ex: 5521999999999",
+    )
     is_active = models.BooleanField("Ativo", default=True)
     created_at = models.DateTimeField("Criado em", auto_now_add=True)
 
@@ -125,6 +132,12 @@ class TeamMember(models.Model):
             self.accent_color = "#f97316"
         else:
             self.accent_color = "#3b82f6"
+
+        if self.whatsapp_number:
+            raw_wa = str(self.whatsapp_number).split("@")[0]
+            self.whatsapp_number = "".join(ch for ch in raw_wa if ch.isdigit())[:30]
+        else:
+            self.whatsapp_number = ""
 
         if not self.avatar_initials:
             words = [w for w in (self.name or "").strip().split() if w]
@@ -194,6 +207,18 @@ class SystemIntegrationConfig(models.Model):
         blank=True,
         default="",
     )
+    default_whatsapp_number = models.CharField(
+        "WhatsApp Padrão (Fallback)",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Número padrão de fallback para lembretes e confirmações.",
+    )
+    whatsapp_notifications_enabled = models.BooleanField(
+        "Notificações e Lembretes WhatsApp Ativos",
+        default=True,
+        help_text="Kill-Switch global para envio de confirmações e lembretes via Evolution API.",
+    )
     updated_at = models.DateTimeField("Atualizado em", auto_now=True)
 
     class Meta:
@@ -220,6 +245,8 @@ class SystemIntegrationConfig(models.Model):
                 ),
                 "evolution_api_key": os.getenv("EVOLUTION_API_KEY", "").strip(),
                 "evolution_instance_name": os.getenv("EVOLUTION_INSTANCE_NAME", "").strip(),
+                "default_whatsapp_number": os.getenv("DEFAULT_WHATSAPP_NUMBER", "").strip(),
+                "whatsapp_notifications_enabled": True,
             },
         )
         return obj
