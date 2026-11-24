@@ -609,18 +609,26 @@
                 hx-post="{% url 'tasks:member_save' %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
-                x-data="{ memberAccent: '#3b82f6' }"
+                x-data="{
+                    memberAccent: '#3b82f6',
+                    canVault: false,
+                    isAdmin: false,
+                    loginActive: true
+                }"
                 class="ds-layer-inset ds-r-16 p-3.5 sm:p-4 space-y-3"
             >
                 <input type="hidden" name="view" value="settings" />
                 <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
                 <input type="hidden" name="accent_color" :value="memberAccent" />
+                <input type="hidden" name="can_access_vault" :value="canVault ? '1' : '0'" />
+                <input type="hidden" name="is_superuser" :value="isAdmin ? '1' : '0'" />
+                <input type="hidden" name="user_is_active" :value="loginActive ? '1' : '0'" />
 
                 <div class="flex items-center justify-between">
                     <span class="text-[11px] font-mono font-bold uppercase tracking-wider ds-accent-text">
-                        + Cadastrar Responsável
+                        + Cadastrar Responsável &amp; Acesso
                     </span>
-                    <span class="text-[10px] font-mono ds-text-secondary">Tag @handle</span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Tag @handle &bull; Login</span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -681,6 +689,73 @@
                     </div>
                 </div>
 
+                <!-- Credenciais de Login & Permissões do Portal -->
+                <div class="pt-2 border-t border-[#334155]/50 space-y-2.5">
+                    <span class="block text-[10px] font-mono uppercase tracking-wider ds-urgent-text font-bold">
+                        Login de Acesso &amp; Permissões (Opcional)
+                    </span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Usuário de Login (username)</label>
+                            <input
+                                type="text"
+                                name="username"
+                                autocomplete="off"
+                                placeholder="Ex: lucas_dev"
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">Senha de Acesso</label>
+                            <input
+                                type="password"
+                                name="password"
+                                autocomplete="new-password"
+                                placeholder="Obrigatória ao criar login"
+                                class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 pt-1">
+                        <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-12">
+                            <span class="text-[11px] font-mono ds-text-primary">Acesso ao Cofre (Ver, Copiar, Criar e Editar)</span>
+                            <button
+                                type="button"
+                                @click="canVault = !canVault"
+                                :class="canVault ? 'is-on' : ''"
+                                class="ds-switch"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-12">
+                            <span class="text-[11px] font-mono ds-text-primary">Admin Geral (Acesso Total)</span>
+                            <button
+                                type="button"
+                                @click="isAdmin = !isAdmin; if (isAdmin) canVault = true;"
+                                :class="isAdmin ? 'is-on' : ''"
+                                class="ds-switch"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-12">
+                            <span class="text-[11px] font-mono ds-text-primary">Login Ativo</span>
+                            <button
+                                type="button"
+                                @click="loginActive = !loginActive"
+                                :class="loginActive ? 'is-on' : ''"
+                                class="ds-switch"
+                            >
+                                <span class="ds-switch-thumb"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <button
                     type="submit"
                     class="w-full ds-btn-primary py-2.5 px-4 ds-r-12 text-xs font-mono font-bold flex items-center justify-center gap-2"
@@ -693,12 +768,18 @@
             <div class="space-y-2.5">
                 <div class="flex items-center justify-between px-1">
                     <span class="text-[11px] font-mono uppercase tracking-wider ds-text-secondary">Membros &amp; Parceiros</span>
-                    <span class="text-[10px] font-mono ds-text-secondary">Tarefas Ativas</span>
+                    <span class="text-[10px] font-mono ds-text-secondary">Acessos &amp; Tarefas</span>
                 </div>
 
                 {% for member in all_team_members %}
                 <div
-                    x-data="{ editing: false, editColor: '{{ member.accent_color|default:'#3b82f6' }}' }"
+                    x-data="{
+                        editing: false,
+                        editColor: '{{ member.accent_color|default:'#3b82f6' }}',
+                        editCanVault: {% if member.can_access_vault or member.user.is_superuser %}true{% else %}false{% endif %},
+                        editIsAdmin: {% if member.user and member.user.is_superuser %}true{% else %}false{% endif %},
+                        editLoginActive: {% if not member.user or member.user.is_active %}true{% else %}false{% endif %}
+                    }"
                     class="ds-layer-inset ds-r-16 p-3 space-y-2.5 transition {% if not member.is_active %}opacity-60{% endif %}"
                 >
                     <div class="flex items-center justify-between gap-2.5">
@@ -709,16 +790,32 @@
                             >
                                 {{ member.avatar_initials }}
                             </div>
-                            <div class="min-w-0">
+                            <div class="min-w-0 space-y-1">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="text-xs sm:text-sm font-bold ds-text-primary truncate">{{ member.name }}</span>
                                     <span class="px-2 py-0.5 ds-layer-raised ds-r-pill text-[10px] font-mono {% if member.is_orange_accent %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
                                         @{{ member.handle }}
                                     </span>
+                                    {% if member.user %}
+                                        {% if member.user.is_superuser %}
+                                        <span class="ds-badge ds-badge-urgent">Admin Geral</span>
+                                        {% endif %}
+                                        {% if not member.user.is_active %}
+                                        <span class="ds-badge ds-badge-neutral">Login Inativo</span>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if member.can_access_vault or member.user.is_superuser %}
+                                    <span class="ds-badge ds-badge-primary">Cofre Liberado</span>
+                                    {% endif %}
                                 </div>
                                 <p class="text-[11px] font-mono ds-text-secondary truncate">
-                                    {{ member.role|default:"Membro da Equipe" }} &bull;
-                                    <strong class="ds-text-primary">{{ member.active_tasks_count|default:0 }}</strong> ativas
+                                    {{ member.role|default:"Membro da Equipe" }}
+                                    {% if member.user %}
+                                    &bull; Login: <strong class="ds-accent-text">{{ member.user.username }}</strong>
+                                    {% else %}
+                                    &bull; <span class="opacity-75">Sem login</span>
+                                    {% endif %}
+                                    &bull; <strong class="ds-text-primary">{{ member.active_tasks_count|default:0 }}</strong> ativas
                                 </p>
                             </div>
                         </div>
@@ -760,20 +857,23 @@
                         </div>
                     </div>
 
-                    <!-- Formulário Inline de Edição do Responsável -->
+                    <!-- Formulário Inline de Edição do Responsável & Login/Permissões -->
                     <form
                         x-show="editing"
                         x-cloak
                         hx-post="{% url 'tasks:member_save' %}"
                         hx-target="#dashboard-content"
                         hx-swap="innerHTML"
-                        class="pt-2 border-t border-[#334155]/50 space-y-2"
+                        class="pt-2 border-t border-[#334155]/50 space-y-2.5"
                     >
                         <input type="hidden" name="view" value="settings" />
                         <input type="hidden" name="workspace" value="{{ current_workspace_slug }}" />
                         <input type="hidden" name="member_id" value="{{ member.id }}" />
                         <input type="hidden" name="is_active" value="{% if member.is_active %}1{% else %}0{% endif %}" />
                         <input type="hidden" name="accent_color" :value="editColor" />
+                        <input type="hidden" name="can_access_vault" :value="editCanVault ? '1' : '0'" />
+                        <input type="hidden" name="is_superuser" :value="editIsAdmin ? '1' : '0'" />
+                        <input type="hidden" name="user_is_active" :value="editLoginActive ? '1' : '0'" />
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <input
@@ -799,6 +899,60 @@
                                 class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs ds-text-primary"
                                 placeholder="Cargo/Papel"
                             />
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                                type="text"
+                                name="username"
+                                value="{{ member.user.username|default:'' }}"
+                                autocomplete="off"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="Login (username)"
+                            />
+                            <input
+                                type="password"
+                                name="password"
+                                autocomplete="new-password"
+                                class="ds-input ds-layer-raised ds-r-8 px-2.5 py-1.5 text-xs font-mono ds-text-primary"
+                                placeholder="{% if member.user %}Nova senha (vazio = manter){% else %}Senha para criar login{% endif %}"
+                            />
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-8">
+                                <span class="text-[10px] font-mono ds-text-primary">Acesso ao Cofre (Ver, Copiar, Criar e Editar)</span>
+                                <button
+                                    type="button"
+                                    @click="editCanVault = !editCanVault"
+                                    :class="editCanVault ? 'is-on' : ''"
+                                    class="ds-switch"
+                                >
+                                    <span class="ds-switch-thumb"></span>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-8">
+                                <span class="text-[10px] font-mono ds-text-primary">Admin Geral</span>
+                                <button
+                                    type="button"
+                                    @click="editIsAdmin = !editIsAdmin; if (editIsAdmin) editCanVault = true;"
+                                    :class="editIsAdmin ? 'is-on' : ''"
+                                    class="ds-switch"
+                                >
+                                    <span class="ds-switch-thumb"></span>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 ds-layer-raised ds-r-8">
+                                <span class="text-[10px] font-mono ds-text-primary">Login Ativo</span>
+                                <button
+                                    type="button"
+                                    @click="editLoginActive = !editLoginActive"
+                                    :class="editLoginActive ? 'is-on' : ''"
+                                    class="ds-switch"
+                                >
+                                    <span class="ds-switch-thumb"></span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="flex items-center justify-between gap-2">

@@ -358,8 +358,9 @@
                 </button>
             </div>
 
-            <!-- Direita: Botão Áudio IA + Botão 1-Click Sync Gemini + Cronômetro Ativo Compacto + Switch Tátil Dual-Theme -->
+            <!-- Direita: Botão Áudio IA + Botão 1-Click Sync Gemini (Admin) + Cronômetro Ativo Compacto + Switch Tátil Dual-Theme -->
             <div class="flex items-center justify-end gap-1.5 sm:gap-2.5 min-w-0 shrink-0 ml-auto">
+                {% if is_general_admin %}
                 <!-- Botão Tátil Áudio IA (Com Medidor de Cota Diária Segura) -->
                 <button
                     type="button"
@@ -390,6 +391,7 @@
                     <span class="hidden sm:inline">Sync Gemini</span>
                     <span class="sm:hidden">Gemini</span>
                 </button>
+                {% endif %}
 
                 <div id="active-timer-container" class="min-w-0 max-w-[180px] sm:max-w-[300px] xl:w-[350px] xl:max-w-none">
                     {% include "partials/active_timer.html" %}

@@ -32,7 +32,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=focus"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=focus{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -49,7 +49,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=list&sort={{ list_sort|default:'arrival_desc' }}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=list&sort={{ list_sort|default:'arrival_desc' }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -67,7 +67,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=kanban"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=kanban{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -84,7 +84,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=analytics"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=analytics{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -101,10 +101,11 @@
                 </span>
             </button>
 
+            {% if is_general_admin %}
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=integrations"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=integrations&user_filter={{ current_user_filter|default:'me' }}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -120,11 +121,12 @@
                     {{ recent_webhooks|length|default:0 }}
                 </span>
             </button>
+            {% endif %}
 
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=styleguide"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=styleguide{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -139,10 +141,11 @@
                 <span class="ds-badge ds-text-accent">DS</span>
             </button>
 
+            {% if can_access_vault %}
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=vault"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=vault{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -156,11 +159,31 @@
                 </span>
                 <span class="ds-badge ds-text-urgent">{{ vault_total_count|default:0 }}</span>
             </button>
+            {% endif %}
+
+            {% if is_general_admin %}
+            <button
+                type="button"
+                @click="sidebarOpen = false"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&view=users&user_filter={{ current_user_filter|default:'me' }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                class="w-full flex items-center justify-between px-3 py-2 ds-r-12 text-xs font-medium transition {% if view_mode == 'users' %}ds-layer-raised ds-text-primary font-semibold{% else %}ds-text-secondary hover:ds-text-primary{% endif %}"
+            >
+                <span class="flex items-center gap-2 truncate">
+                    <svg class="w-4 h-4 ds-text-urgent shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="truncate">Usuários &amp; Acessos</span>
+                </span>
+                <span class="ds-badge ds-text-urgent">{{ users_total_count|default:0 }}</span>
+            </button>
 
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=settings"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&view=settings&user_filter={{ current_user_filter|default:'me' }}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -174,6 +197,7 @@
                 </span>
                 <span class="ds-badge ds-text-accent">CRUD</span>
             </button>
+            {% endif %}
         </nav>
     </div>
 
@@ -187,7 +211,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace=all&view={{ view_mode|default:'focus' }}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace=all&view={{ view_mode|default:'focus' }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -204,7 +228,7 @@
             <button
                 type="button"
                 @click="sidebarOpen = false"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ ws.slug }}&view={{ view_mode|default:'focus' }}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ ws.slug }}&view={{ view_mode|default:'focus' }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -235,7 +259,7 @@
                 <button
                     type="button"
                     @click="sidebarOpen = false"
-                    hx-get="{% url 'tasks:dashboard' %}?workspace={{ proj.workspace.slug }}&project={{ proj.id }}&view={{ view_mode|default:'focus' }}"
+                    hx-get="{% url 'tasks:dashboard' %}?workspace={{ proj.workspace.slug }}&project={{ proj.id }}&view={{ view_mode|default:'focus' }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                     hx-target="#dashboard-content"
                     hx-swap="innerHTML"
                     hx-push-url="true"
@@ -277,12 +301,43 @@
     </div>
 </div>
 
-<!-- Rodapé da Sidebar -->
-<div class="p-4 border-t border-[#334155] space-y-2 text-[11px] font-mono ds-text-secondary">
+<!-- Rodapé da Sidebar: Conta Logada + Logout Tátil -->
+<div class="p-4 border-t border-[#334155] space-y-2.5 text-[11px] font-mono ds-text-secondary">
+    {% if request.user.is_authenticated %}
+    <div class="ds-layer-inset ds-r-12 p-2.5 flex items-center justify-between gap-2 min-w-0">
+        <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-bold ds-text-primary truncate">
+                    {% if request.user.team_profile %}{{ request.user.team_profile.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}
+                </span>
+                {% if is_general_admin %}
+                <span class="ds-badge ds-badge-urgent">Admin</span>
+                {% else %}
+                <span class="ds-badge ds-badge-primary">Equipe</span>
+                {% endif %}
+            </div>
+            <span class="block text-[10px] font-mono ds-text-secondary truncate">
+                @{{ request.user.username }}
+            </span>
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="shrink-0">
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text"
+                title="Encerrar sessão ({{ request.user.username }})"
+            >
+                Sair
+            </button>
+        </form>
+    </div>
+    {% endif %}
+    {% if is_general_admin %}
     <div class="flex items-center justify-between">
         <a href="/api/docs" target="_blank" class="hover:ds-text-accent transition">Swagger API &nearr;</a>
         <a href="/admin/" target="_blank" class="hover:ds-text-accent transition">Django Admin &nearr;</a>
     </div>
+    {% endif %}
     <p class="text-[10px] opacity-75">
         Tactile Soft UI &bull; Django 5 &bull; HTMX
     </p>

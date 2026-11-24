@@ -32,20 +32,23 @@ def recalculate_daily_priorities() -> dict:
         task.save()
         escalated_tomorrow_count += 1
 
-    # 3. Completa os 3 slots do Top 3 caso haja slots vagos
-    current_top_three_count = active_qs.filter(is_top_three=True).count()
+    # 3. Completa os 3 slots do Top 3 separadamente por owner caso haja slots vagos
     promoted_count = 0
-    if current_top_three_count < 3:
-        slots_available = 3 - current_top_three_count
-        candidates = (
-            active_qs.filter(is_top_three=False)
-            .exclude(status=Task.Status.INBOX)
-            .order_by("-priority_score", "due_date", "created_at")[:slots_available]
-        )
-        for candidate in candidates:
-            candidate.is_top_three = True
-            candidate.save()
-            promoted_count += 1
+    distinct_owner_ids = list(active_qs.values_list("owner_id", flat=True).distinct())
+    for owner_id in distinct_owner_ids:
+        owner_active_qs = active_qs.filter(owner_id=owner_id)
+        current_top_three_count = owner_active_qs.filter(is_top_three=True).count()
+        if current_top_three_count < 3:
+            slots_available = 3 - current_top_three_count
+            candidates = (
+                owner_active_qs.filter(is_top_three=False)
+                .exclude(status=Task.Status.INBOX)
+                .order_by("-priority_score", "due_date", "created_at")[:slots_available]
+            )
+            for candidate in candidates:
+                candidate.is_top_three = True
+                candidate.save()
+                promoted_count += 1
 
     return {
         "date": str(today),

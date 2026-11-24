@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.utils import timezone
@@ -39,6 +40,15 @@ class Task(models.Model):
         blank=True,
         related_name="tasks",
         verbose_name="Responsável (TeamMember)",
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="owned_tasks",
+        db_index=True,
+        verbose_name="Proprietário (Usuário)",
     )
     title = models.CharField("Título da Tarefa", max_length=255)
     notes = models.TextField("Notas e Especificações", blank=True, default="")
@@ -140,10 +150,10 @@ class Task(models.Model):
             if self.completed_at is not None:
                 self.completed_at = None
 
-            # Regra de Negócio: Máximo de 3 tarefas ativas (status != 'done') no Top 3 do Dia
+            # Regra de Negócio: Máximo de 3 tarefas ativas (status != 'done') no Top 3 do Dia (isolado por owner)
             if self.is_top_three:
                 active_top_qs = (
-                    Task.objects.filter(is_top_three=True)
+                    Task.objects.filter(is_top_three=True, owner_id=self.owner_id)
                     .exclude(status=self.Status.DONE)
                     .exclude(pk=self.pk)
                     .order_by("created_at", "pk")

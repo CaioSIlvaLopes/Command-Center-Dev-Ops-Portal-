@@ -40,6 +40,10 @@ urlpatterns = [
     path("vault/save/", views.vault_credential_save_view, name="vault_save"),
     path("vault/<int:pk>/delete/", views.vault_credential_delete_view, name="vault_delete"),
     path("vault/<int:pk>/secret/", views.vault_credential_secret_view, name="vault_secret"),
+    # Gestão Dedicada de Usuários & Acessos (/?view=users)
+    path("users/save/", views.user_account_save_view, name="user_save"),
+    path("users/<int:pk>/toggle-active/", views.user_toggle_active_view, name="user_toggle_active"),
+    path("users/<int:pk>/toggle-vault/", views.user_toggle_vault_view, name="user_toggle_vault"),
     # Fragmentos parciais individuais
     path("partials/top-three/", views.partial_top_three_view, name="partial_top_three"),
     path("partials/shift-queue/", views.partial_shift_queue_view, name="partial_shift_queue"),
@@ -48,4 +52,5 @@ urlpatterns = [
     path("partials/integrations/", views.partial_integrations_view, name="partial_integrations"),
     path("partials/styleguide/", views.partial_styleguide_view, name="partial_styleguide"),
     path("partials/settings/", views.partial_settings_view, name="partial_settings"),
+    path("partials/users/", views.partial_users_view, name="partial_users"),
 ]

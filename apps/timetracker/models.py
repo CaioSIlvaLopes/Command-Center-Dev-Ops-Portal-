@@ -1,4 +1,5 @@
 import math
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -11,6 +12,15 @@ class TimeLog(models.Model):
         on_delete=models.CASCADE,
         related_name="time_logs",
         verbose_name="Tarefa",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="time_logs",
+        db_index=True,
+        verbose_name="Usuário",
     )
     start_time = models.DateTimeField("Início", default=timezone.now)
     end_time = models.DateTimeField("Término", null=True, blank=True)

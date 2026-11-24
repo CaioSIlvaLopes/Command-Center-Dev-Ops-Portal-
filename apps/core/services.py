@@ -81,10 +81,37 @@ def detect_project_for_workspace(text: str, workspace: Workspace) -> Optional[Pr
     return None
 
 
+def _resolve_task_owner(task: Task, owner: Any = None):
+    """
+    Resolve o proprietário (`owner`) da tarefa conforme a arquitetura multiusuário:
+    - Usuário comum autenticado (`not is_general_admin`): força `owner=request.user`
+      (não permite criar tarefas na fila de outro usuário).
+    - Admin Geral ou Webhook externo: se `@handle` resolver para um `TeamMember`
+      que possua `member.user`, define `owner = member.user`; caso contrário,
+      define `owner` como o usuário logado (ou o primeiro `is_superuser=True` em webhooks sem sessão).
+    """
+    from apps.core.permissions import get_default_superuser, is_general_admin
+
+    auth_user = owner if (owner and getattr(owner, "is_authenticated", False)) else None
+    if auth_user and not is_general_admin(auth_user):
+        if task.assignee and task.assignee.user_id and task.assignee.user_id != auth_user.id:
+            own_profile = getattr(auth_user, "team_profile", None) if hasattr(auth_user, "team_profile") else None
+            task.assignee = own_profile
+            task.assigned_to = f"@{own_profile.handle}" if own_profile else ""
+        return auth_user
+
+    if task.assignee and task.assignee.user_id:
+        return task.assignee.user
+    if auth_user:
+        return auth_user
+    return get_default_superuser()
+
+
 def parse_and_create_task(
     raw_text: str,
     current_workspace_slug: Optional[str] = None,
     default_status: str = Task.Status.TODO,
+    owner: Any = None,
 ) -> Task:
     """
     Interpreta comandos rápidos digitados na barra Ctrl + K (ou via WhatsApp):
@@ -175,6 +202,8 @@ def parse_and_create_task(
         assigned_to=assigned_to,
         due_date=due_date,
     )
+    task._sync_assignee_and_assigned_to()
+    task.owner = _resolve_task_owner(task, owner=owner)
     task.save()
     return task
 
@@ -251,15 +280,17 @@ def _create_subtasks_from_list(task: Task, subtasks_raw: list) -> int:
     return created_count
 
 
-def _create_completed_timelog(task: Task, minutes: int) -> Optional[TimeLog]:
+def _create_completed_timelog(task: Task, minutes: int, user: Any = None) -> Optional[TimeLog]:
     """Cria um registro TimeLog concluído caso minutes > 0."""
     minutes = int(minutes or 0)
     if minutes <= 0:
         return None
     end_dt = timezone.now()
     start_dt = end_dt - timedelta(minutes=minutes)
+    auth_user = user if (user and getattr(user, "is_authenticated", False)) else task.owner
     return TimeLog.objects.create(
         task=task,
+        user=auth_user,
         start_time=start_dt,
         end_time=end_dt,
         duration_minutes=minutes,
@@ -302,6 +333,7 @@ def process_gemini_or_whatsapp_sync(
     source: str = "gemini",
     current_workspace_slug: Optional[str] = None,
     sender: str = "",
+    owner: Any = None,
 ) -> dict:
     """
     Motor Inteligente da Fase 6 (Ponte Dupla Gemini + WhatsApp):
@@ -401,7 +433,12 @@ def process_gemini_or_whatsapp_sync(
                 task.external_ref = external_ref
 
         if assignee_raw:
+            task.assignee = None
             task.assigned_to = f"@{assignee_raw}"
+
+        task._sync_assignee_and_assigned_to()
+        if task.owner_id is None or assignee_raw or (owner and getattr(owner, "is_authenticated", False)):
+            task.owner = _resolve_task_owner(task, owner=owner)
 
         task.save()
 
@@ -410,7 +447,7 @@ def process_gemini_or_whatsapp_sync(
                 active_log.stop()
 
         subtasks_created = _create_subtasks_from_list(task, subtasks_list)
-        _create_completed_timelog(task, minutes_spent)
+        _create_completed_timelog(task, minutes_spent, user=owner)
 
         return {
             "format": "json",
@@ -464,11 +501,13 @@ def process_gemini_or_whatsapp_sync(
         raw_text=first_line,
         current_workspace_slug=current_workspace_slug,
         default_status=default_status,
+        owner=owner,
     )
 
     minutes_spent = 0
     subtasks_to_create = []
     notes_lines = []
+    assignee_updated = False
 
     for line in remaining_lines:
         proj_match = re.match(r"^(?:projeto|project|loja|cliente)\s*:\s*(.+)$", line, re.IGNORECASE)
@@ -490,7 +529,9 @@ def process_gemini_or_whatsapp_sync(
         if assignee_line_match:
             raw_handle = assignee_line_match.group(1).strip().lstrip("@").split()[0].lower()
             if raw_handle:
+                task.assignee = None
                 task.assigned_to = f"@{raw_handle}"
+                assignee_updated = True
             continue
 
         subtask_match = re.match(r"^(?:[-*•]|\d+\.)\s*(.+)$", line) or re.match(r"^(\[[ xX✓]\]\s*.+)$", line)
@@ -509,7 +550,9 @@ def process_gemini_or_whatsapp_sync(
 
     if sender and not task.assigned_to:
         formatted_sender = sender if sender.startswith("@") else f"@{sender.split()[0].lower()}"
+        task.assignee = None
         task.assigned_to = formatted_sender[:50]
+        assignee_updated = True
 
     if notes_lines:
         task.notes = "\n".join(notes_lines).strip()
@@ -517,10 +560,14 @@ def process_gemini_or_whatsapp_sync(
     if task.status != default_status and default_status == Task.Status.INBOX:
         task.status = Task.Status.INBOX
 
+    if assignee_updated:
+        task._sync_assignee_and_assigned_to()
+        task.owner = _resolve_task_owner(task, owner=owner)
+
     task.save()
 
     subtasks_created = _create_subtasks_from_list(task, subtasks_to_create)
-    _create_completed_timelog(task, minutes_spent)
+    _create_completed_timelog(task, minutes_spent, user=owner)
 
     return {
         "format": "multiline" if remaining_lines else "singleline",

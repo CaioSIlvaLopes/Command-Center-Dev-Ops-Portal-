@@ -21,7 +21,7 @@
         {% if current_project %}
         <button
             type="button"
-            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug }}&view={{ view_mode }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
             hx-target="#dashboard-content"
             hx-swap="innerHTML"
             hx-push-url="true"
@@ -35,7 +35,7 @@
         <div class="shrink-0 whitespace-nowrap inline-flex items-center ds-layer-inset ds-r-12 p-0.5 overflow-hidden">
             <button
                 type="button"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ proj.workspace.slug }}&project={{ proj.id }}&view={{ view_mode }}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ proj.workspace.slug }}&project={{ proj.id }}&view={{ view_mode }}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -79,7 +79,9 @@
     </div>
 </div>
 
-{% if view_mode == 'settings' %}
+{% if view_mode == 'users' %}
+    {% include "partials/users_view.html" %}
+{% elif view_mode == 'settings' %}
     {% include "partials/settings_view.html" %}
 {% elif view_mode == 'vault' %}
     {% include "partials/vault_view.html" %}

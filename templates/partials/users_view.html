@@ -1,0 +1,692 @@
+<section
+    id="users-access-view-section"
+    x-data="{
+        userModalOpen: false,
+        searchQuery: '',
+        editUserId: '',
+        formTeamMemberId: '',
+        formFullName: '',
+        formHandle: '',
+        formRole: '',
+        formUsername: '',
+        formEmail: '',
+        formPassword: '',
+        formShowPassword: false,
+        formAccentColor: '#3b82f6',
+        formCanVault: false,
+        formIsSuperuser: false,
+        formIsActive: true,
+        credentialsCopied: false,
+
+        openNewUserModal() {
+            this.editUserId = '';
+            this.formTeamMemberId = '';
+            this.formFullName = '';
+            this.formHandle = '';
+            this.formRole = '';
+            this.formUsername = '';
+            this.formEmail = '';
+            this.formPassword = '';
+            this.formShowPassword = false;
+            this.formAccentColor = '#3b82f6';
+            this.formCanVault = false;
+            this.formIsSuperuser = false;
+            this.formIsActive = true;
+            this.credentialsCopied = false;
+            this.userModalOpen = true;
+        },
+
+        openEditUserModal(u) {
+            this.editUserId = u.id;
+            this.formTeamMemberId = '';
+            this.formFullName = u.fullName || '';
+            this.formHandle = u.handle || '';
+            this.formRole = u.role || '';
+            this.formUsername = u.username || '';
+            this.formEmail = u.email || '';
+            this.formPassword = '';
+            this.formShowPassword = false;
+            this.formAccentColor = u.accentColor === '#f97316' ? '#f97316' : '#3b82f6';
+            this.formCanVault = Boolean(u.canVault);
+            this.formIsSuperuser = Boolean(u.isSuperuser);
+            this.formIsActive = Boolean(u.isActive);
+            this.credentialsCopied = false;
+            this.userModalOpen = true;
+        },
+
+        applyUnlinkedMember(event) {
+            const opt = event.target.selectedOptions[0];
+            if (!opt || !opt.value) return;
+            this.formFullName = opt.getAttribute('data-name') || this.formFullName;
+            this.formHandle = opt.getAttribute('data-handle') || this.formHandle;
+            this.formRole = opt.getAttribute('data-role') || this.formRole;
+            const color = opt.getAttribute('data-color');
+            if (color === '#f97316' || color === '#3b82f6') {
+                this.formAccentColor = color;
+            }
+            if (!this.formUsername && this.formHandle) {
+                this.formUsername = this.formHandle;
+            }
+        },
+
+        generateStrongPassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*-_';
+            let pwd = '';
+            const array = new Uint32Array(14);
+            window.crypto.getRandomValues(array);
+            for (let i = 0; i < 14; i++) {
+                pwd += chars[array[i] % chars.length];
+            }
+            this.formPassword = pwd;
+            this.formShowPassword = true;
+        },
+
+        async copyCredentialsSummary() {
+            const loginStr = (this.formUsername || '(definir)').trim();
+            const passStr = (this.formPassword || '(mantida)').trim();
+            const summary = `Login: ${loginStr} | Senha: ${passStr}`;
+            try {
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(summary);
+                    this.credentialsCopied = true;
+                    setTimeout(() => { this.credentialsCopied = false; }, 2200);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+
+        matchesSearch(text) {
+            const q = (this.searchQuery || '').trim().toLowerCase();
+            if (!q) return true;
+            return (text || '').toLowerCase().includes(q);
+        }
+    }"
+    class="space-y-6 pb-8 min-w-0"
+>
+    <!-- 1. Cabeçalho da Tela: Título, Subtítulo e Botão + Novo Usuário -->
+    <div class="ds-layer-raised ds-r-24 p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 min-w-0">
+        <div class="space-y-1.5 min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="ds-badge ds-badge-urgent">IAM &bull; CONTROLE DE ACESSOS &amp; LOGINS</span>
+                <span class="ds-badge ds-badge-primary">Sincronizado com @TeamMember &amp; Cofre</span>
+            </div>
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight ds-text-primary">
+                Usuários &amp; Acessos
+            </h1>
+            <p class="text-xs sm:text-sm ds-text-secondary max-w-3xl">
+                Crie contas de login, redefina senhas, gerencie privilégios de <strong class="ds-urgent-text">Admin Geral</strong>
+                e libere ou revogue o acesso ao <strong class="ds-accent-text">Cofre de Credenciais</strong> em 1 clique sem precisar abrir o Django Admin.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2.5 shrink-0">
+            <button
+                type="button"
+                id="btn-open-new-user-modal"
+                @click="openNewUserModal()"
+                class="px-4 py-2.5 ds-btn-primary ds-r-12 text-xs font-mono font-bold inline-flex items-center gap-2"
+            >
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>+ Novo Usuário</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Barra Compacta com 4 KPIs (.ds-layer-raised ds-r-16) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 min-w-0">
+        <div class="ds-layer-raised ds-r-16 p-4 flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+                <span class="block text-[10px] font-mono uppercase tracking-wider ds-text-secondary truncate">Total de Usuários</span>
+                <span class="text-xl sm:text-2xl font-bold font-mono ds-text-primary">{{ users_total_count }}</span>
+            </div>
+            <div class="w-10 h-10 ds-layer-inset ds-r-12 flex items-center justify-center ds-accent-text font-mono font-bold text-sm shrink-0">
+                @
+            </div>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 p-4 flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+                <span class="block text-[10px] font-mono uppercase tracking-wider ds-text-secondary truncate">Contas Ativas</span>
+                <span class="text-xl sm:text-2xl font-bold font-mono ds-accent-text">{{ users_active_count }}</span>
+            </div>
+            <div class="w-10 h-10 ds-layer-inset ds-r-12 flex items-center justify-center ds-accent-text font-mono font-bold text-sm shrink-0">
+                &#10003;
+            </div>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 p-4 flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+                <span class="block text-[10px] font-mono uppercase tracking-wider ds-text-secondary truncate">Admins Gerais</span>
+                <span class="text-xl sm:text-2xl font-bold font-mono ds-urgent-text">{{ users_admin_count }}</span>
+            </div>
+            <div class="w-10 h-10 ds-layer-inset ds-r-12 flex items-center justify-center ds-urgent-text font-mono font-bold text-sm shrink-0">
+                &#9733;
+            </div>
+        </div>
+
+        <div class="ds-layer-raised ds-r-16 p-4 flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+                <span class="block text-[10px] font-mono uppercase tracking-wider ds-text-secondary truncate">Cofre Liberado</span>
+                <span class="text-xl sm:text-2xl font-bold font-mono ds-urgent-text">{{ users_vault_count }}</span>
+            </div>
+            <div class="w-10 h-10 ds-layer-inset ds-r-12 flex items-center justify-center ds-urgent-text font-mono font-bold text-sm shrink-0">
+                &#128274;
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Barra de Busca Rápida em Tempo Real + Legenda de Permissões -->
+    <div class="ds-layer-raised ds-r-16 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+        <div class="relative flex-1 max-w-md min-w-0">
+            <input
+                type="text"
+                x-model="searchQuery"
+                placeholder="Buscar usuário por nome, @handle, login ou cargo..."
+                class="w-full ds-input ds-layer-inset ds-r-12 pl-3.5 pr-8 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+            />
+            <button
+                type="button"
+                x-show="searchQuery"
+                x-cloak
+                @click="searchQuery = ''"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-mono ds-urgent-text"
+                title="Limpar busca"
+            >
+                &times;
+            </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono ds-text-secondary">
+            <span>Switches 1-Clique:</span>
+            <span class="ds-badge ds-badge-primary">Cofre (Ver/Criar/Editar)</span>
+            <span class="ds-badge ds-badge-urgent">Admin Geral (Acesso Total)</span>
+        </div>
+    </div>
+
+    <!-- 4. Listagem de Usuários (Cards Táteis Responsivos Desktop + Mobile) -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 min-w-0">
+        {% for u in users_accounts_list %}
+        <div
+            data-user-card-id="{{ u.id }}"
+            x-show="matchesSearch('{{ u.effective_name|escapejs }} @{{ u.effective_handle|escapejs }} {{ u.username|escapejs }} {{ u.effective_role|escapejs }} {{ u.email|escapejs }}')"
+            class="ds-layer-raised ds-r-16 p-4 sm:p-5 flex flex-col justify-between gap-4 min-w-0 transition {% if not u.is_active %}opacity-65{% endif %}"
+        >
+            <!-- Topo do Card: Avatar, Nome, @handle, Cargo e Badges de Papel/Status -->
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 min-w-0">
+                <div class="flex items-start gap-3 min-w-0">
+                    <div
+                        class="w-11 h-11 shrink-0 ds-layer-inset ds-r-pill flex items-center justify-center font-mono text-sm font-bold {% if u.effective_is_orange %}ds-urgent-text{% else %}ds-accent-text{% endif %}"
+                    >
+                        {{ u.effective_initials }}
+                    </div>
+
+                    <div class="min-w-0 space-y-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h3 class="text-sm sm:text-base font-bold ds-text-primary truncate">
+                                {{ u.effective_name }}
+                            </h3>
+                            <span class="px-2 py-0.5 ds-layer-inset ds-r-pill text-[11px] font-mono {% if u.effective_is_orange %}ds-urgent-text{% else %}ds-accent-text{% endif %}">
+                                @{{ u.effective_handle }}
+                            </span>
+                            {% if u.id == request.user.id %}
+                            <span class="ds-badge ds-badge-neutral">Você</span>
+                            {% endif %}
+                        </div>
+
+                        <p class="text-xs font-mono ds-text-secondary truncate">
+                            {{ u.effective_role }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Badges de Papel, Cofre e Status -->
+                <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                    {% if u.is_superuser %}
+                    <span class="ds-badge ds-badge-urgent">&#9733; Admin Geral</span>
+                    {% else %}
+                    <span class="ds-badge ds-badge-neutral">Colaborador</span>
+                    {% endif %}
+
+                    {% if u.effective_can_access_vault %}
+                    <span class="ds-badge ds-badge-primary">&#128274; Cofre Liberado</span>
+                    {% endif %}
+
+                    {% if not u.is_active %}
+                    <span class="ds-badge ds-badge-urgent">Inativo</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cavidade de Metadados de Login, E-mail, Último Acesso e Tarefas (.ds-layer-inset) -->
+            <div class="ds-layer-inset ds-r-12 p-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono min-w-0">
+                <div class="min-w-0">
+                    <span class="block text-[10px] uppercase ds-text-secondary">Login (Username)</span>
+                    <span class="font-bold ds-text-primary truncate block" title="{{ u.username }}">
+                        {{ u.username }}
+                    </span>
+                    {% if u.email %}
+                    <span class="text-[10px] ds-text-secondary truncate block" title="{{ u.email }}">
+                        {{ u.email }}
+                    </span>
+                    {% endif %}
+                </div>
+
+                <div class="min-w-0">
+                    <span class="block text-[10px] uppercase ds-text-secondary">Último Acesso</span>
+                    <span class="ds-text-primary truncate block">
+                        {% if u.last_login %}
+                            {{ u.last_login|date:"d/m/Y H:i" }}
+                        {% else %}
+                            Nunca acessou
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="min-w-0">
+                    <span class="block text-[10px] uppercase ds-text-secondary">Fila de Tarefas</span>
+                    <span class="ds-accent-text font-bold">
+                        {{ u.active_tasks_count }} ativas
+                    </span>
+                    <span class="text-[10px] ds-text-secondary">
+                        ({{ u.total_tasks_count }} total)
+                    </span>
+                </div>
+            </div>
+
+            <!-- Rodapé de Ações Rápidas (1-Click Switches + Editar/Senha + Ver Tarefas) -->
+            <div class="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t" style="border-color: var(--ds-border-subtle);">
+                <!-- Switches 1-Clique: Cofre e Conta Ativa -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Switch 1-Clique: Acesso ao Cofre -->
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            hx-post="{% url 'tasks:user_toggle_vault' u.id %}?view=users&workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&user_filter={{ current_user_filter|default:'me' }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            class="ds-switch {% if u.effective_can_access_vault %}is-on{% endif %}"
+                            title="Alternar Acesso ao Cofre para @{{ u.effective_handle }}"
+                        >
+                            <span class="ds-switch-thumb"></span>
+                        </button>
+                        <span class="text-[11px] font-mono ds-text-secondary">Cofre</span>
+                    </div>
+
+                    <!-- Switch 1-Clique: Ativar/Desativar Conta -->
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            {% if u.id == request.user.id %}
+                            disabled
+                            title="Trava de segurança: você não pode desativar sua própria conta"
+                            {% else %}
+                            hx-post="{% url 'tasks:user_toggle_active' u.id %}?view=users&workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&user_filter={{ current_user_filter|default:'me' }}"
+                            hx-target="#dashboard-content"
+                            hx-swap="innerHTML"
+                            title="Ativar ou Desativar login de {{ u.username }}"
+                            {% endif %}
+                            class="ds-switch {% if u.is_active %}is-on{% endif %} {% if u.id == request.user.id %}opacity-50 cursor-not-allowed{% endif %}"
+                        >
+                            <span class="ds-switch-thumb"></span>
+                        </button>
+                        <span class="text-[11px] font-mono ds-text-secondary">Ativo</span>
+                    </div>
+                </div>
+
+                <!-- Botões: Ver Tarefas e Editar / Senha -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        hx-get="{% url 'tasks:dashboard' %}?view=focus&workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&user_filter={{ u.id }}"
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        hx-push-url="true"
+                        class="px-2.5 py-1.5 ds-btn-tactile ds-r-8 text-[11px] font-mono ds-accent-text"
+                        title="Inspecionar fila de tarefas de {{ u.effective_name }}"
+                    >
+                        Ver Tarefas ({{ u.active_tasks_count }})
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="openEditUserModal({
+                            id: '{{ u.id }}',
+                            fullName: '{{ u.effective_name|escapejs }}',
+                            handle: '{{ u.effective_handle|escapejs }}',
+                            role: '{{ u.effective_role|escapejs }}',
+                            username: '{{ u.username|escapejs }}',
+                            email: '{{ u.email|escapejs }}',
+                            accentColor: '{{ u.effective_accent_color|escapejs }}',
+                            canVault: {% if u.effective_can_access_vault %}true{% else %}false{% endif %},
+                            isSuperuser: {% if u.is_superuser %}true{% else %}false{% endif %},
+                            isActive: {% if u.is_active %}true{% else %}false{% endif %}
+                        })"
+                        class="px-3 py-1.5 ds-btn-tactile ds-r-8 text-[11px] font-mono font-semibold"
+                    >
+                        Editar / Senha
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="xl:col-span-2 ds-layer-inset ds-r-16 p-8 text-center space-y-2">
+            <p class="text-xs font-mono font-bold ds-text-primary uppercase">
+                Nenhum usuário cadastrado
+            </p>
+            <p class="text-xs ds-text-secondary">
+                Clique em <strong>+ Novo Usuário</strong> para criar o primeiro acesso da equipe.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 5. Modal Tátil de Criação e Edição de Usuário (.ds-layer-modal) -->
+    <div
+        id="user-account-modal"
+        x-show="userModalOpen"
+        x-cloak
+        x-transition.opacity
+        @click.self="userModalOpen = false"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+    >
+        <div
+            @click.outside="userModalOpen = false"
+            class="w-full max-w-xl ds-layer-modal ds-r-24 p-5 sm:p-6 space-y-4 my-auto min-w-0"
+        >
+            <!-- Cabeçalho do Modal -->
+            <div class="flex items-center justify-between gap-2 border-b pb-3" style="border-color: var(--ds-border-subtle);">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="inline-flex items-center justify-center w-8 h-8 ds-layer-raised ds-r-12 ds-accent-text font-mono font-bold text-xs shrink-0">
+                        @
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold ds-text-primary truncate" x-text="editUserId ? 'Editar Usuário & Redefinir Senha' : 'Novo Usuário & Perfil da Equipe'"></h3>
+                        <p class="text-[11px] font-mono ds-text-secondary truncate">
+                            Sincroniza automaticamente login Django e responsável <code class="ds-accent-text">@handle</code>
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    @click="userModalOpen = false"
+                    class="px-2.5 py-1 ds-btn-tactile ds-r-8 text-xs font-mono shrink-0"
+                >
+                    &times;
+                </button>
+            </div>
+
+            <!-- Formulário HTMX -->
+            <form
+                hx-post="{% url 'tasks:user_save' %}?view=users&workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&user_filter={{ current_user_filter|default:'me' }}"
+                hx-target="#dashboard-content"
+                hx-swap="innerHTML"
+                @htmx:after-request="if ($event.detail.successful) { userModalOpen = false; }"
+                class="space-y-4 min-w-0"
+            >
+                <input type="hidden" name="view" value="users" />
+                <input type="hidden" name="user_id" :value="editUserId" />
+                <input type="hidden" name="accent_color" :value="formAccentColor" />
+                <input type="hidden" name="can_access_vault" :value="formCanVault ? '1' : '0'" />
+                <input type="hidden" name="is_superuser" :value="formIsSuperuser ? '1' : '0'" />
+                <input type="hidden" name="is_active" :value="formIsActive ? '1' : '0'" />
+
+                {% if unlinked_team_members %}
+                <div x-show="!editUserId" class="ds-layer-inset ds-r-12 p-3 space-y-1.5">
+                    <label class="block text-[10px] font-mono uppercase ds-urgent-text font-bold">
+                        Vincular a um Membro @handle já existente (Opcional)
+                    </label>
+                    <select
+                        name="team_member_id"
+                        x-model="formTeamMemberId"
+                        @change="applyUnlinkedMember($event)"
+                        class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary focus:outline-none"
+                    >
+                        <option value="">-- Criar novo perfil @handle do zero --</option>
+                        {% for tm in unlinked_team_members %}
+                        <option
+                            value="{{ tm.id }}"
+                            data-name="{{ tm.name }}"
+                            data-handle="{{ tm.handle }}"
+                            data-role="{{ tm.role }}"
+                            data-color="{{ tm.accent_color }}"
+                        >
+                            @{{ tm.handle }} &mdash; {{ tm.name }} ({{ tm.role|default:"Sem cargo" }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <!-- Nome e @handle -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Nome Completo *
+                        </label>
+                        <input
+                            type="text"
+                            name="full_name"
+                            x-model="formFullName"
+                            required
+                            placeholder="Ex: Henrique Costa"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Handle (@identificador) *
+                        </label>
+                        <input
+                            type="text"
+                            name="handle"
+                            x-model="formHandle"
+                            required
+                            placeholder="Ex: henrique"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <!-- Cargo e Cor do Avatar -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Cargo / Função
+                        </label>
+                        <input
+                            type="text"
+                            name="role"
+                            x-model="formRole"
+                            placeholder="Ex: Gestor de Tráfego / Dev"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Cor de Acento do Avatar
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                @click="formAccentColor = '#3b82f6'"
+                                :class="formAccentColor === '#3b82f6' ? 'ds-btn-primary font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-3 py-2 ds-r-12 text-xs font-mono flex items-center justify-center gap-1.5"
+                            >
+                                <span class="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></span>
+                                <span>Azul</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="formAccentColor = '#f97316'"
+                                :class="formAccentColor === '#f97316' ? 'ds-btn-urgent font-bold' : 'ds-btn-tactile ds-text-secondary'"
+                                class="px-3 py-2 ds-r-12 text-xs font-mono flex items-center justify-center gap-1.5"
+                            >
+                                <span class="w-2.5 h-2.5 rounded-full bg-[#f97316]"></span>
+                                <span>Laranja</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Login (username) e E-mail -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            Login de Acesso (Username) *
+                        </label>
+                        <input
+                            type="text"
+                            name="username"
+                            x-model="formUsername"
+                            required
+                            autocomplete="off"
+                            placeholder="Ex: henrique_wsa"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase ds-text-secondary mb-1">
+                            E-mail (Opcional)
+                        </label>
+                        <input
+                            type="email"
+                            name="email"
+                            x-model="formEmail"
+                            placeholder="henrique@wsacreative.com.br"
+                            class="w-full ds-input ds-layer-inset ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <!-- Senha + Gerar Senha Forte (14 chars) + Copiar Credenciais -->
+                <div class="ds-layer-inset ds-r-16 p-3.5 space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <label class="text-[10px] font-mono uppercase ds-text-secondary">
+                            Senha de Acesso (Mín. 6 caracteres)
+                            <span x-show="editUserId" class="ds-urgent-text">(Deixe vazio p/ manter)</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                @click="generateStrongPassword()"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-accent-text"
+                                title="Gerar senha forte aleatória de 14 caracteres"
+                            >
+                                &#9889; Gerar Senha Forte
+                            </button>
+                            <button
+                                type="button"
+                                @click="copyCredentialsSummary()"
+                                class="px-2 py-1 ds-btn-tactile ds-r-8 text-[10px] font-mono ds-urgent-text"
+                                title="Copiar Login e Senha para enviar ao colaborador"
+                            >
+                                <span x-text="credentialsCopied ? 'Credenciais Copiadas!' : '&#128203; Copiar Credenciais'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input
+                            :type="formShowPassword ? 'text' : 'password'"
+                            name="password"
+                            x-model="formPassword"
+                            :required="!editUserId"
+                            minlength="6"
+                            autocomplete="new-password"
+                            :placeholder="editUserId ? 'Digite nova senha para redefinir...' : 'Digite ou gere uma senha forte...'"
+                            class="w-full ds-input ds-layer-raised ds-r-12 px-3 py-2 text-xs font-mono ds-text-primary placeholder-[#94a3b8] focus:outline-none"
+                        />
+                        <button
+                            type="button"
+                            @click="formShowPassword = !formShowPassword"
+                            class="px-3 py-2 ds-btn-tactile ds-r-12 text-xs font-mono shrink-0"
+                            title="Mostrar / Ocultar Senha"
+                        >
+                            <span x-text="formShowPassword ? 'Ocultar' : '&#128065; Ver'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Switches Táteis de Permissões -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between gap-3 px-3.5 py-2.5 ds-layer-inset ds-r-12">
+                        <div class="min-w-0">
+                            <span class="block text-xs font-mono font-semibold ds-text-primary">
+                                Acesso ao Cofre (Ver, Copiar, Criar e Editar)
+                            </span>
+                            <span class="block text-[10px] font-mono ds-text-secondary">
+                                Permite consultar e cadastrar senhas no Cofre (exclusão continua restrita ao Admin)
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="formCanVault = !formCanVault"
+                            :class="formCanVault ? 'is-on' : ''"
+                            class="ds-switch shrink-0"
+                        >
+                            <span class="ds-switch-thumb"></span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3 px-3.5 py-2.5 ds-layer-inset ds-r-12">
+                        <div class="min-w-0">
+                            <span class="block text-xs font-mono font-semibold ds-urgent-text">
+                                Admin Geral (Acesso Total)
+                            </span>
+                            <span class="block text-[10px] font-mono ds-text-secondary">
+                                Permite ver tarefas de todos os usuários, gerenciar equipe, integrações e excluir do Cofre
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="formIsSuperuser = !formIsSuperuser; if (formIsSuperuser) formCanVault = true;"
+                            :class="formIsSuperuser ? 'is-on' : ''"
+                            class="ds-switch shrink-0"
+                        >
+                            <span class="ds-switch-thumb"></span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3 px-3.5 py-2.5 ds-layer-inset ds-r-12">
+                        <div class="min-w-0">
+                            <span class="block text-xs font-mono font-semibold ds-text-primary">
+                                Conta Ativa
+                            </span>
+                            <span class="block text-[10px] font-mono ds-text-secondary">
+                                Desative para bloquear imediatamente o login sem apagar o histórico de tarefas
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="formIsActive = !formIsActive"
+                            :class="formIsActive ? 'is-on' : ''"
+                            class="ds-switch shrink-0"
+                        >
+                            <span class="ds-switch-thumb"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botões de Ação do Modal -->
+                <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 pt-2">
+                    <button
+                        type="button"
+                        @click="userModalOpen = false"
+                        class="px-4 py-2 ds-btn-tactile ds-r-12 text-xs font-mono"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        class="px-5 py-2 ds-btn-primary ds-r-12 text-xs font-mono font-bold"
+                    >
+                        <span x-text="editUserId ? 'Salvar Alterações' : '+ Criar Usuário & Acesso'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>

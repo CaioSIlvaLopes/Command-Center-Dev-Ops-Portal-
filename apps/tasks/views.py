@@ -2,9 +2,10 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.db.models import Count, Q, Sum
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
@@ -15,6 +16,12 @@ from apps.core.models import (
     SystemIntegrationConfig,
     TeamMember,
     Workspace,
+)
+from apps.core.permissions import (
+    can_user_access_vault,
+    get_visible_tasks_queryset,
+    is_general_admin,
+    user_can_access_task,
 )
 from apps.core.services import parse_and_create_task, process_gemini_or_whatsapp_sync
 from apps.core.voice_service import (
@@ -87,6 +94,8 @@ def get_view_mode_from_request(request: HttpRequest) -> str:
         default_mode = "settings"
     elif request.path.startswith("/vault/"):
         default_mode = "vault"
+    elif request.path.startswith("/users/"):
+        default_mode = "users"
     else:
         default_mode = "focus"
     mode = (
@@ -95,9 +104,27 @@ def get_view_mode_from_request(request: HttpRequest) -> str:
         or _get_hx_current_url_param(request, "view")
         or default_mode
     ).strip().lower()
-    if mode not in ("focus", "list", "kanban", "analytics", "integrations", "styleguide", "settings", "vault"):
+    if mode not in ("focus", "list", "kanban", "analytics", "integrations", "styleguide", "settings", "vault", "users"):
         return default_mode
     return mode
+
+
+def get_user_filter_from_request(request: HttpRequest) -> str:
+    """
+    Extrai o filtro de visão de usuário (`me`, `all` ou ID numérico de User).
+    Usuários comuns (`not is_general_admin`) ficam estritamente restritos a `me`.
+    """
+    if not is_general_admin(request.user):
+        return "me"
+    raw_uf = (
+        request.GET.get("user_filter")
+        or request.POST.get("user_filter")
+        or _get_hx_current_url_param(request, "user_filter")
+        or "me"
+    ).strip().lower()
+    if raw_uf in ("me", "all") or raw_uf.isdigit():
+        return raw_uf
+    return "me"
 
 
 def build_dashboard_context(
@@ -112,12 +139,25 @@ def build_dashboard_context(
 
     project_id = get_project_id_from_request(request)
     view_mode = get_view_mode_from_request(request)
+    current_user_filter = get_user_filter_from_request(request)
+    admin_flag = is_general_admin(request.user)
+    vault_flag = can_user_access_vault(request.user)
+
+    visible_tasks_all_ws = get_visible_tasks_queryset(request.user, current_user_filter)
 
     workspaces = Workspace.objects.annotate(
-        active_count=Count("tasks", filter=~Q(tasks__status=Task.Status.DONE), distinct=True),
-        inbox_count=Count("tasks", filter=Q(tasks__status=Task.Status.INBOX), distinct=True),
+        active_count=Count(
+            "tasks",
+            filter=Q(tasks__in=visible_tasks_all_ws) & ~Q(tasks__status=Task.Status.DONE),
+            distinct=True,
+        ),
+        inbox_count=Count(
+            "tasks",
+            filter=Q(tasks__in=visible_tasks_all_ws, tasks__status=Task.Status.INBOX),
+            distinct=True,
+        ),
         projects_count=Count("projects", distinct=True),
-        tasks_count=Count("tasks", distinct=True),
+        tasks_count=Count("tasks", filter=Q(tasks__in=visible_tasks_all_ws), distinct=True),
     ).order_by("shortcut_key", "name")
 
     current_workspace = None
@@ -126,7 +166,11 @@ def build_dashboard_context(
 
     # Projetos para o Launchpad rápido
     projects_qs = Project.objects.filter(is_active=True).select_related("workspace").annotate(
-        active_tasks_count=Count("tasks", filter=~Q(tasks__status=Task.Status.DONE))
+        active_tasks_count=Count(
+            "tasks",
+            filter=Q(tasks__in=visible_tasks_all_ws) & ~Q(tasks__status=Task.Status.DONE),
+            distinct=True,
+        )
     )
     if current_workspace:
         projects = list(projects_qs.filter(workspace=current_workspace))
@@ -137,9 +181,14 @@ def build_dashboard_context(
     if project_id:
         current_project = Project.objects.filter(pk=project_id).select_related("workspace").first()
 
-    base_tasks_qs = Task.objects.select_related(
-        "workspace", "project", "assignee"
+    raw_base_tasks_qs = Task.objects.select_related(
+        "workspace", "project", "assignee", "owner"
     ).prefetch_related("subtasks", "time_logs", "webhook_events")
+    base_tasks_qs = get_visible_tasks_queryset(
+        request.user,
+        current_user_filter,
+        base_qs=raw_base_tasks_qs,
+    )
     if current_workspace:
         base_tasks_qs = base_tasks_qs.filter(workspace=current_workspace)
     if current_project:
@@ -151,13 +200,14 @@ def build_dashboard_context(
         .exclude(status=Task.Status.DONE)
         .order_by("-priority_score", "created_at")[:3]
     )
+    top_three_ids = [t.id for t in top_three_tasks]
     empty_slots_count = max(0, 3 - len(top_three_tasks))
     top_three_empty_slots = list(range(len(top_three_tasks) + 1, 4))[:empty_slots_count]
 
-    # Fila por Turnos (Manhã, Tarde, Noite) - tarefas ativas fora da Inbox e fora do Top 3
+    # Fila por Turnos (Manhã, Tarde, Noite) - tarefas ativas fora da Inbox e fora dos 3 cards exibidos no Top 3
     shift_base_qs = (
         base_tasks_qs.exclude(status__in=[Task.Status.DONE, Task.Status.INBOX])
-        .filter(is_top_three=False)
+        .exclude(pk__in=top_three_ids)
         .order_by("-priority_score", "due_date", "-created_at")
     )
     morning_tasks = list(shift_base_qs.filter(shift=Task.Shift.MORNING))
@@ -247,15 +297,16 @@ def build_dashboard_context(
     doing_count_for_ws = base_tasks_qs.filter(status=Task.Status.DOING).count()
     todo_count_for_ws = base_tasks_qs.filter(status=Task.Status.TODO).count()
 
-    # Timer Ativo Global
-    active_timelog = (
-        TimeLog.objects.filter(is_running=True)
-        .select_related("task", "task__workspace", "task__project")
-        .first()
+    # Timer Ativo Isolado por Usuário
+    active_timelog_qs = TimeLog.objects.filter(is_running=True).select_related(
+        "task", "task__workspace", "task__project"
     )
+    if request.user.is_authenticated:
+        active_timelog_qs = active_timelog_qs.filter(user=request.user)
+    active_timelog = active_timelog_qs.first()
     running_task_id = active_timelog.task_id if active_timelog else None
 
-    # Métricas Rápidas e Analytics (Pulso & Métricas)
+    # Métricas Rápidas e Analytics (Pulso & Métricas) respeitando tarefas visíveis
     today = date.today()
     week_ago = today - timedelta(days=7)
 
@@ -275,8 +326,14 @@ def build_dashboard_context(
         else 0
     )
 
+    visible_timelogs_qs = TimeLog.objects.filter(task__in=visible_tasks_all_ws)
+    if current_workspace:
+        visible_timelogs_ws_qs = visible_timelogs_qs.filter(task__workspace=current_workspace)
+    else:
+        visible_timelogs_ws_qs = visible_timelogs_qs
+
     total_focus_minutes = (
-        TimeLog.objects.filter(start_time__date=today).aggregate(
+        visible_timelogs_qs.filter(start_time__date=today).aggregate(
             total=Sum("duration_minutes")
         )["total"]
         or 0
@@ -284,9 +341,16 @@ def build_dashboard_context(
 
     # Cálculo de horas registradas por Workspace (Pulso & Analytics)
     ws_analytics_qs = Workspace.objects.annotate(
-        logged_minutes=Sum("tasks__time_logs__duration_minutes"),
-        tasks_total=Count("tasks", distinct=True),
-        tasks_done=Count("tasks", filter=Q(tasks__status=Task.Status.DONE), distinct=True),
+        logged_minutes=Sum(
+            "tasks__time_logs__duration_minutes",
+            filter=Q(tasks__in=visible_tasks_all_ws),
+        ),
+        tasks_total=Count("tasks", filter=Q(tasks__in=visible_tasks_all_ws), distinct=True),
+        tasks_done=Count(
+            "tasks",
+            filter=Q(tasks__in=visible_tasks_all_ws, tasks__status=Task.Status.DONE),
+            distinct=True,
+        ),
     ).order_by("-logged_minutes", "shortcut_key")
 
     max_ws_minutes = max([w.logged_minutes or 0 for w in ws_analytics_qs] + [1])
@@ -309,8 +373,11 @@ def build_dashboard_context(
         Project.objects.filter(is_active=True)
         .select_related("workspace")
         .annotate(
-            logged_minutes=Sum("tasks__time_logs__duration_minutes"),
-            tasks_total=Count("tasks", distinct=True),
+            logged_minutes=Sum(
+                "tasks__time_logs__duration_minutes",
+                filter=Q(tasks__in=visible_tasks_all_ws),
+            ),
+            tasks_total=Count("tasks", filter=Q(tasks__in=visible_tasks_all_ws), distinct=True),
         )
         .order_by("-logged_minutes", "name")
     )
@@ -332,14 +399,12 @@ def build_dashboard_context(
         )
 
     total_logged_all_minutes = (
-        TimeLog.objects.aggregate(total=Sum("duration_minutes"))["total"] or 0
+        visible_timelogs_qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
     )
 
-    recent_timelogs_qs = TimeLog.objects.select_related(
+    recent_timelogs_qs = visible_timelogs_ws_qs.select_related(
         "task", "task__workspace", "task__project"
     ).order_by("-start_time")
-    if current_workspace:
-        recent_timelogs_qs = recent_timelogs_qs.filter(task__workspace=current_workspace)
     recent_timelogs = list(recent_timelogs_qs[:12])
 
     all_active_tasks = list(base_tasks_qs.exclude(status=Task.Status.DONE)[:20])
@@ -350,12 +415,14 @@ def build_dashboard_context(
         ).order_by("-created_at")[:20]
     )
 
-    team_members = list(TeamMember.objects.filter(is_active=True).order_by("handle"))
+    team_members = list(TeamMember.objects.filter(is_active=True).select_related("user").order_by("handle"))
     all_team_members = list(
-        TeamMember.objects.annotate(
+        TeamMember.objects.select_related("user")
+        .annotate(
             active_tasks_count=Count("tasks", filter=~Q(tasks__status=Task.Status.DONE)),
             total_tasks_count=Count("tasks"),
-        ).order_by("-is_active", "handle")
+        )
+        .order_by("-is_active", "handle")
     )
     all_projects_manage = list(
         Project.objects.select_related("workspace")
@@ -399,43 +466,120 @@ def build_dashboard_context(
     if vault_layout not in ("grid", "list"):
         vault_layout = "grid"
 
-    base_vault_qs = CredentialEntry.objects.select_related("workspace", "project")
-    if current_workspace:
-        base_vault_qs = base_vault_qs.filter(workspace=current_workspace)
-    if current_project:
-        base_vault_qs = base_vault_qs.filter(project=current_project)
+    if vault_flag:
+        base_vault_qs = CredentialEntry.objects.select_related("workspace", "project")
+        if current_workspace:
+            base_vault_qs = base_vault_qs.filter(workspace=current_workspace)
+        if current_project:
+            base_vault_qs = base_vault_qs.filter(project=current_project)
 
-    vault_total_count = base_vault_qs.count()
-    vault_email_ecom_count = base_vault_qs.filter(
-        category__in=[CredentialEntry.Category.EMAIL, CredentialEntry.Category.ECOMMERCE]
-    ).count()
-    vault_infra_api_count = base_vault_qs.filter(
-        category__in=[
-            CredentialEntry.Category.INFRA,
-            CredentialEntry.Category.DOMAIN,
-            CredentialEntry.Category.API,
-        ]
-    ).count()
+        vault_total_count = base_vault_qs.count()
+        vault_email_ecom_count = base_vault_qs.filter(
+            category__in=[CredentialEntry.Category.EMAIL, CredentialEntry.Category.ECOMMERCE]
+        ).count()
+        vault_infra_api_count = base_vault_qs.filter(
+            category__in=[
+                CredentialEntry.Category.INFRA,
+                CredentialEntry.Category.DOMAIN,
+                CredentialEntry.Category.API,
+            ]
+        ).count()
 
-    vault_qs = base_vault_qs
-    if vault_category != "all":
-        vault_qs = vault_qs.filter(category=vault_category)
+        vault_qs = base_vault_qs
+        if vault_category != "all":
+            vault_qs = vault_qs.filter(category=vault_category)
 
-    if vault_search_query:
-        clean_vq = vault_search_query.lstrip("#").strip()
-        vault_qs = vault_qs.filter(
-            Q(title__icontains=vault_search_query)
-            | Q(username_or_email__icontains=vault_search_query)
-            | Q(notes__icontains=vault_search_query)
-            | Q(recovery_info__icontains=vault_search_query)
-            | Q(project__name__icontains=clean_vq)
-            | Q(workspace__slug__icontains=clean_vq)
-            | Q(workspace__name__icontains=clean_vq)
+        if vault_search_query:
+            clean_vq = vault_search_query.lstrip("#").strip()
+            vault_qs = vault_qs.filter(
+                Q(title__icontains=vault_search_query)
+                | Q(username_or_email__icontains=vault_search_query)
+                | Q(notes__icontains=vault_search_query)
+                | Q(recovery_info__icontains=vault_search_query)
+                | Q(project__name__icontains=clean_vq)
+                | Q(workspace__slug__icontains=clean_vq)
+                | Q(workspace__name__icontains=clean_vq)
+            )
+
+        vault_credentials = list(vault_qs.order_by("workspace__shortcut_key", "category", "title"))
+    else:
+        vault_total_count = 0
+        vault_email_ecom_count = 0
+        vault_infra_api_count = 0
+        vault_credentials = []
+
+    User = get_user_model()
+    filterable_users = (
+        list(User.objects.filter(is_active=True).select_related("team_profile").order_by("username"))
+        if admin_flag
+        else []
+    )
+
+    if admin_flag:
+        users_accounts_list = list(
+            User.objects.select_related("team_profile").order_by("-is_active", "-is_superuser", "username")
         )
+        for u_obj in users_accounts_list:
+            profile = getattr(u_obj, "team_profile", None) if hasattr(u_obj, "team_profile") else None
+            eff_name = (profile.name if profile else "") or u_obj.get_full_name() or u_obj.username
+            eff_handle = profile.handle if profile else slugify(u_obj.username).replace("-", "") or u_obj.username
+            eff_role = (profile.role if profile else "") or ("Admin Geral" if u_obj.is_superuser else "Colaborador")
+            eff_color = (
+                profile.accent_color
+                if profile and profile.accent_color in ("#3b82f6", "#f97316")
+                else ("#f97316" if u_obj.is_superuser else "#3b82f6")
+            )
+            eff_initials = (
+                profile.avatar_initials
+                if profile and profile.avatar_initials
+                else (eff_name[:2].upper() if eff_name else u_obj.username[:2].upper())
+            )
+            eff_vault = bool(u_obj.is_superuser or (profile and profile.can_access_vault))
+            u_obj.effective_name = eff_name
+            u_obj.effective_handle = eff_handle
+            u_obj.effective_role = eff_role
+            u_obj.effective_accent_color = eff_color
+            u_obj.effective_is_orange = eff_color.lower() == "#f97316"
+            u_obj.effective_initials = eff_initials
+            u_obj.effective_can_access_vault = eff_vault
+            u_obj.active_tasks_count = (
+                Task.objects.filter(Q(owner=u_obj) | Q(assignee__user=u_obj))
+                .exclude(status=Task.Status.DONE)
+                .distinct()
+                .count()
+            )
+            u_obj.total_tasks_count = (
+                Task.objects.filter(Q(owner=u_obj) | Q(assignee__user=u_obj))
+                .distinct()
+                .count()
+            )
 
-    vault_credentials = list(vault_qs.order_by("workspace__shortcut_key", "category", "title"))
+        unlinked_team_members = list(
+            TeamMember.objects.filter(user__isnull=True).order_by("name", "handle")
+        )
+        users_total_count = len(users_accounts_list)
+        users_active_count = sum(1 for u_obj in users_accounts_list if u_obj.is_active)
+        users_admin_count = sum(1 for u_obj in users_accounts_list if u_obj.is_superuser)
+        users_vault_count = sum(1 for u_obj in users_accounts_list if u_obj.effective_can_access_vault)
+    else:
+        users_accounts_list = []
+        unlinked_team_members = []
+        users_total_count = 0
+        users_active_count = 0
+        users_admin_count = 0
+        users_vault_count = 0
 
     return {
+        "is_general_admin": admin_flag,
+        "can_access_vault": vault_flag,
+        "current_user_filter": current_user_filter,
+        "filterable_users": filterable_users,
+        "users_accounts_list": users_accounts_list,
+        "unlinked_team_members": unlinked_team_members,
+        "users_total_count": users_total_count,
+        "users_active_count": users_active_count,
+        "users_admin_count": users_admin_count,
+        "users_vault_count": users_vault_count,
         "workspaces": workspaces,
         "all_projects": Project.objects.filter(is_active=True).select_related("workspace"),
         "all_projects_manage": all_projects_manage,
@@ -546,7 +690,14 @@ def render_drawer_with_oob(
 
 @require_GET
 def dashboard_view(request: HttpRequest) -> HttpResponse:
-    """View principal do Command Center (suporta `?workspace=slug`, `?project=id`, `?view=focus|kanban|analytics|settings`)."""
+    """View principal do Command Center (suporta `?workspace=slug`, `?project=id`, `?view=focus|kanban|analytics|settings|users`)."""
+    view_mode = get_view_mode_from_request(request)
+    if view_mode == "users" and not is_general_admin(request.user):
+        return redirect("/?view=focus")
+    if view_mode == "vault" and not can_user_access_vault(request.user):
+        return HttpResponseForbidden("Acesso negado ao Cofre de Credenciais.")
+    if view_mode in ("integrations", "settings") and not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     return render_dashboard_or_partial(request)
 
 
@@ -570,6 +721,7 @@ def command_bar_create_view(request: HttpRequest) -> HttpResponse:
     task = parse_and_create_task(
         raw_text=raw_command,
         current_workspace_slug=workspace_slug,
+        owner=request.user,
     )
 
     msg = f'Tarefa "{task.title}" criada em #{task.workspace.slug} (Score: {task.priority_score}).'
@@ -592,11 +744,13 @@ def command_bar_create_view(request: HttpRequest) -> HttpResponse:
 def task_detail_drawer_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Carrega a gaveta lateral (Slide-Over) com detalhes, notas e checklist da tarefa."""
     task = get_object_or_404(
-        Task.objects.select_related("workspace", "project", "assignee").prefetch_related(
+        Task.objects.select_related("workspace", "project", "assignee", "owner").prefetch_related(
             "subtasks", "time_logs"
         ),
         pk=pk,
     )
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     context = build_dashboard_context(request, workspace_slug=workspace_slug)
     context["drawer_task"] = task
@@ -607,7 +761,9 @@ def task_detail_drawer_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_update_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Salva edições completas da tarefa vindas do Slide-Over Drawer."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
 
     title = request.POST.get("title", "").strip()
     if title:
@@ -688,7 +844,9 @@ def task_update_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def subtask_add_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Adiciona uma nova SubTask (item de checklist) à Task."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     subtask_title = request.POST.get("title", "").strip()
     if subtask_title:
         SubTask.objects.create(task=task, title=subtask_title[:200], is_done=False)
@@ -698,7 +856,9 @@ def subtask_add_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def subtask_toggle_view(request: HttpRequest, subtask_id: int) -> HttpResponse:
     """Marca/desmarca uma SubTask e atualiza a barra de progresso da tarefa."""
-    subtask = get_object_or_404(SubTask.objects.select_related("task"), pk=subtask_id)
+    subtask = get_object_or_404(SubTask.objects.select_related("task", "task__assignee"), pk=subtask_id)
+    if not user_can_access_task(request.user, subtask.task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     subtask.is_done = not subtask.is_done
     subtask.save(update_fields=["is_done"])
     return render_drawer_with_oob(request, task=subtask.task)
@@ -707,7 +867,9 @@ def subtask_toggle_view(request: HttpRequest, subtask_id: int) -> HttpResponse:
 @require_POST
 def subtask_delete_view(request: HttpRequest, subtask_id: int) -> HttpResponse:
     """Exclui uma SubTask e atualiza a barra de progresso."""
-    subtask = get_object_or_404(SubTask.objects.select_related("task"), pk=subtask_id)
+    subtask = get_object_or_404(SubTask.objects.select_related("task", "task__assignee"), pk=subtask_id)
+    if not user_can_access_task(request.user, subtask.task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     task = subtask.task
     subtask.delete()
     return render_drawer_with_oob(request, task=task)
@@ -721,7 +883,9 @@ def task_move_view(request: HttpRequest, pk: int) -> HttpResponse:
     Endpoint HTMX `POST /tasks/<int:pk>/move/` acionado pelo SortableJS ao arrastar
     um card entre colunas do Kanban ou entre os turnos (Manhã, Tarde, Noite).
     """
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
 
     new_status = request.POST.get("status", "").strip()
@@ -762,7 +926,9 @@ def task_move_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_toggle_top_three_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Promove ou remove uma tarefa do Top 3 do Dia respeitando o limite de 3 slots."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
 
     if task.status == Task.Status.DONE:
@@ -802,7 +968,9 @@ def task_toggle_top_three_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_status_update_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Atualiza o status da tarefa (inbox, todo, doing, done) via HTMX."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     new_status = request.POST.get("status", "").strip()
 
@@ -832,7 +1000,9 @@ def task_status_update_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_shift_update_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Altera o turno de execução (morning, afternoon, night)."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     new_shift = request.POST.get("shift", "").strip()
 
@@ -857,7 +1027,9 @@ def task_shift_update_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_triage_inbox_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Aprova item da Inbox enviando-o para a fila do turno selecionado (ou Top 3)."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     shift = request.POST.get("shift") or task.shift
     promote_top3 = request.POST.get("top3") == "1"
@@ -888,7 +1060,9 @@ def task_triage_inbox_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_priority_update_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Atualiza impacto e urgência recalculando automaticamente o GeneratedField priority_score."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
 
     try:
@@ -913,7 +1087,9 @@ def task_priority_update_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def task_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Remove uma tarefa do Command Center via HTMX."""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     title = task.title
     task.delete()
@@ -928,6 +1104,8 @@ def task_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def trigger_recalculate_priorities_view(request: HttpRequest) -> HttpResponse:
     """Aciona manualmente a rotina Celery de recálculo diário de prioridades via UI."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     workspace_slug = get_workspace_slug_from_request(request)
     result = recalculate_daily_priorities()
     msg = (
@@ -950,6 +1128,8 @@ def simulate_webhook_view(request: HttpRequest) -> HttpResponse:
     Simulador de Webhooks com 1 clique na Inbox e na aba Integrações & Logs:
     Suporta `whatsapp`, `evolution_real`, `github`, `github_open_real`, `github_close_real` e `ecommerce`.
     """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     workspace_slug = get_workspace_slug_from_request(request)
     source = request.POST.get("source", "whatsapp").strip().lower()
 
@@ -1086,6 +1266,8 @@ def simulate_webhook_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def reprocess_webhook_event_view(request: HttpRequest, event_id: int) -> HttpResponse:
     """Reprocessa um `WebhookEvent` existente com 1 clique na tela de Integrações & Logs."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     event = get_object_or_404(WebhookEvent, pk=event_id)
     workspace_slug = get_workspace_slug_from_request(request)
 
@@ -1134,6 +1316,8 @@ def partial_analytics_view(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def partial_integrations_view(request: HttpRequest) -> HttpResponse:
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     context = build_dashboard_context(request)
     return render(request, "partials/integrations_view.html", context)
 
@@ -1146,8 +1330,18 @@ def partial_styleguide_view(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def partial_settings_view(request: HttpRequest) -> HttpResponse:
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     context = build_dashboard_context(request)
     return render(request, "partials/settings_view.html", context)
+
+
+@require_GET
+def partial_users_view(request: HttpRequest) -> HttpResponse:
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+    context = build_dashboard_context(request)
+    return render(request, "partials/users_view.html", context)
 
 
 # --- PHASE 6: PONTE DUPLA GEMINI SYNC (1-CLICK CLIPBOARD PASTE + MULTI-LINE PARSER) ---
@@ -1180,6 +1374,7 @@ def gemini_paste_sync_view(request: HttpRequest) -> HttpResponse:
             raw_input=clipboard_text,
             source="gemini",
             current_workspace_slug=workspace_slug,
+            owner=request.user,
         )
         task = sync_result["task"]
         WebhookEvent.objects.create(
@@ -1236,6 +1431,7 @@ def voice_dictation_create_view(request: HttpRequest) -> HttpResponse:
         raw_input=normalized,
         source="gemini",
         current_workspace_slug=workspace_slug,
+        owner=request.user,
     )
     task = sync_result["task"]
     return render_dashboard_or_partial(
@@ -1292,6 +1488,7 @@ def audio_upload_sync_view(request: HttpRequest) -> HttpResponse:
         transcript_fallback=transcript_fallback,
         extra_hint=extra_hint,
         current_workspace_slug=workspace_slug,
+        owner=request.user,
     )
 
     if result.get("blocked"):
@@ -1319,7 +1516,9 @@ def task_ai_subtasks_view(request: HttpRequest, pk: int) -> HttpResponse:
     Endpoint HTMX (`POST /tasks/<int:pk>/ai-subtasks/`) acionado pelo botão
     `⚡ Quebrar com IA` no cabeçalho de Subtarefas dentro do Slide-Over Drawer.
     """
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     res = generate_subtasks_with_gemini(task)
     if not res.get("ok"):
         msg = f'🔒 {res.get("error")}'
@@ -1334,6 +1533,8 @@ def audio_quota_config_save_view(request: HttpRequest) -> HttpResponse:
     Atualiza as configurações do Motor de Voz & Disjuntor de Cota Diária
     (`gemini_api_key`, `max_daily_audio_requests`, `ai_audio_enabled`) na aba Integrações.
     """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     config = SystemIntegrationConfig.get_solo()
 
     if "toggle_killswitch" in request.POST:
@@ -1396,7 +1597,9 @@ def task_assign_member_view(request: HttpRequest, pk: int) -> HttpResponse:
     Atribui, troca ou remove (`member_id=""` ou `"none"`) o responsável (`TeamMember`)
     de uma `Task` com 1 clique, tanto nos cards do Dashboard/Kanban quanto no Drawer.
     """
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task.objects.select_related("assignee"), pk=pk)
+    if not user_can_access_task(request.user, task):
+        return HttpResponseForbidden("Acesso negado a esta tarefa.")
     workspace_slug = get_workspace_slug_from_request(request)
     raw_member_id = request.POST.get("member_id", "").strip()
     raw_handle = request.POST.get("handle", "").strip().lstrip("@").lower()
@@ -1440,6 +1643,8 @@ def task_assign_member_view(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def workspace_save_view(request: HttpRequest) -> HttpResponse:
     """Cria ou edita uma Frente de Trabalho (`Workspace`) na tela Gestão & Cadastros."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     ws_id = request.POST.get("workspace_id", "").strip()
     name = request.POST.get("name", "").strip()[:100]
     raw_slug = request.POST.get("slug", "").strip().lstrip("#").lower()
@@ -1509,6 +1714,8 @@ def workspace_delete_view(request: HttpRequest, ws_id: int) -> HttpResponse:
     Se possuir tarefas/projetos vinculados e existir outra frente disponível (ou `target_workspace_id`),
     migra as tarefas órfãs automaticamente (a menos que `delete_tasks=1`), evitando qualquer erro 500.
     """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     ws = get_object_or_404(Workspace, pk=ws_id)
     ws_name = ws.name
     ws_slug = ws.slug
@@ -1544,6 +1751,8 @@ def workspace_delete_view(request: HttpRequest, ws_id: int) -> HttpResponse:
 @require_POST
 def project_save_view(request: HttpRequest) -> HttpResponse:
     """Cria ou edita um Projeto, Cliente ou Loja (`Project`) na tela Gestão & Cadastros."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     proj_id = request.POST.get("project_id", "").strip()
     name = request.POST.get("name", "").strip()[:120]
     ws_id = request.POST.get("workspace_id", "").strip()
@@ -1606,6 +1815,8 @@ def project_save_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def project_toggle_active_view(request: HttpRequest, proj_id: int) -> HttpResponse:
     """Alterna o status Ativo / Arquivado (`is_active`) de um `Project`."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     proj = get_object_or_404(Project, pk=proj_id)
     proj.is_active = not proj.is_active
     proj.save(update_fields=["is_active"])
@@ -1620,6 +1831,8 @@ def project_toggle_active_view(request: HttpRequest, proj_id: int) -> HttpRespon
 @require_POST
 def project_delete_view(request: HttpRequest, proj_id: int) -> HttpResponse:
     """Exclui um `Project` (mantendo suas tarefas com `project=None`)."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     proj = get_object_or_404(Project, pk=proj_id)
     proj_name = proj.name
     proj.delete()
@@ -1632,13 +1845,30 @@ def project_delete_view(request: HttpRequest, proj_id: int) -> HttpResponse:
 
 @require_POST
 def team_member_save_view(request: HttpRequest) -> HttpResponse:
-    """Cria ou edita um Responsável / Membro da Equipe (`TeamMember`) na tela Gestão & Cadastros."""
+    """
+    Cria ou edita um Responsável / Membro da Equipe (`TeamMember`) na tela Gestão & Cadastros,
+    incluindo vínculo opcional com usuário de login (`User`), redefinição de senha (`set_password`),
+    permissão de acesso ao Cofre (`can_access_vault`), status de `Admin Geral` (`is_superuser`) e `Login Ativo`.
+    """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+
+    User = get_user_model()
     member_id = request.POST.get("member_id", "").strip()
     name = request.POST.get("name", "").strip()[:100]
     raw_handle = request.POST.get("handle", "").strip().lstrip("@").lower()
     role = request.POST.get("role", "").strip()[:100]
     accent_color = request.POST.get("accent_color", "#3b82f6").strip()
     avatar_initials = request.POST.get("avatar_initials", "").strip().upper()[:4]
+
+    username = request.POST.get("username", "").strip()[:150]
+    password = request.POST.get("password", "").strip()
+    can_access_vault = request.POST.get("can_access_vault") in ("1", "true", "on")
+    is_admin_flag = (
+        request.POST.get("is_superuser") in ("1", "true", "on")
+        or request.POST.get("is_general_admin") in ("1", "true", "on")
+    )
+    user_is_active = request.POST.get("user_is_active", "1") in ("1", "true", "on")
 
     if accent_color not in ("#3b82f6", "#f97316"):
         accent_color = "#3b82f6"
@@ -1655,13 +1885,73 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
     handle = slugify(raw_handle or name).replace("-", "")[:50] or "membro"
 
     if member_id.isdigit():
-        member = get_object_or_404(TeamMember, pk=int(member_id))
+        member = get_object_or_404(TeamMember.objects.select_related("user"), pk=int(member_id))
         if TeamMember.objects.filter(handle__iexact=handle).exclude(pk=member.pk).exists():
             return render_dashboard_or_partial(
                 request,
                 feedback_message=f'Já existe outro membro com o handle "@{handle}".',
                 feedback_level="warning",
             )
+
+        linked_user = member.user
+        if linked_user:
+            effective_username = username or linked_user.username
+            if User.objects.filter(username__iexact=effective_username).exclude(pk=linked_user.pk).exists():
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message=f'O login "{effective_username}" já está em uso por outro usuário.',
+                    feedback_level="warning",
+                )
+
+            # Proteção contra auto-bloqueio do Admin Geral logado
+            if request.user.is_authenticated and linked_user.pk == request.user.pk:
+                if ("is_superuser" in request.POST or "is_general_admin" in request.POST) and not is_admin_flag:
+                    return render_dashboard_or_partial(
+                        request,
+                        feedback_message="Operação bloqueada: você não pode remover seu próprio privilégio de Admin Geral.",
+                        feedback_level="warning",
+                    )
+                if "user_is_active" in request.POST and not user_is_active:
+                    return render_dashboard_or_partial(
+                        request,
+                        feedback_message="Operação bloqueada: você não pode desativar sua própria conta de acesso.",
+                        feedback_level="warning",
+                    )
+
+            linked_user.username = effective_username
+            linked_user.first_name = name[:150]
+            if "is_superuser" in request.POST or "is_general_admin" in request.POST:
+                linked_user.is_superuser = is_admin_flag
+                linked_user.is_staff = is_admin_flag
+            if "user_is_active" in request.POST:
+                linked_user.is_active = user_is_active
+            if password:
+                linked_user.set_password(password)
+            linked_user.save()
+        elif username:
+            if User.objects.filter(username__iexact=username).exists():
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message=f'O login "{username}" já está em uso por outro usuário.',
+                    feedback_level="warning",
+                )
+            if not password:
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message=f'Informe uma senha inicial para criar o login "{username}".',
+                    feedback_level="warning",
+                )
+            linked_user = User.objects.create_user(
+                username=username,
+                password=password,
+                first_name=name[:150],
+            )
+            linked_user.is_superuser = is_admin_flag
+            linked_user.is_staff = is_admin_flag
+            linked_user.is_active = user_is_active
+            linked_user.save()
+            member.user = linked_user
+
         member.name = name
         member.handle = handle
         member.role = role
@@ -1670,8 +1960,13 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
             member.avatar_initials = avatar_initials
         if "is_active" in request.POST:
             member.is_active = request.POST.get("is_active") in ("1", "true", "on")
+        if "can_access_vault" in request.POST or is_admin_flag:
+            member.can_access_vault = bool(can_access_vault or (member.user and member.user.is_superuser))
         member.save()
+
         Task.objects.filter(assignee=member).update(assigned_to=f"@{member.handle}")
+        if member.user_id:
+            Task.objects.filter(assignee=member, owner__isnull=True).update(owner_id=member.user_id)
         msg = f'Responsável @{member.handle} ({member.name}) atualizado.'
     else:
         if TeamMember.objects.filter(handle__iexact=handle).exists():
@@ -1680,18 +1975,48 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
                 feedback_message=f'O responsável "@{handle}" já está cadastrado.',
                 feedback_level="warning",
             )
+
+        linked_user = None
+        if username:
+            if User.objects.filter(username__iexact=username).exists():
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message=f'O login "{username}" já está em uso por outro usuário.',
+                    feedback_level="warning",
+                )
+            if not password:
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message=f'Informe uma senha inicial para criar o login "{username}".',
+                    feedback_level="warning",
+                )
+            linked_user = User.objects.create_user(
+                username=username,
+                password=password,
+                first_name=name[:150],
+            )
+            linked_user.is_superuser = is_admin_flag
+            linked_user.is_staff = is_admin_flag
+            linked_user.is_active = user_is_active
+            linked_user.save()
+
         member = TeamMember.objects.create(
+            user=linked_user,
             name=name,
             handle=handle,
             role=role,
             accent_color=accent_color,
             avatar_initials=avatar_initials,
+            can_access_vault=bool(can_access_vault or is_admin_flag),
             is_active=True,
         )
         # Vincula automaticamente tarefas existentes que já tinham assigned_to="@handle"
+        update_kwargs = {"assignee": member, "assigned_to": f"@{member.handle}"}
         Task.objects.filter(
             assignee__isnull=True, assigned_to__iexact=f"@{member.handle}"
-        ).update(assignee=member, assigned_to=f"@{member.handle}")
+        ).update(**update_kwargs)
+        if linked_user:
+            Task.objects.filter(assignee=member, owner__isnull=True).update(owner=linked_user)
         msg = f'Responsável @{member.handle} ({member.name}) cadastrado na equipe!'
 
     return render_dashboard_or_partial(
@@ -1704,6 +2029,8 @@ def team_member_save_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def team_member_toggle_active_view(request: HttpRequest, member_id: int) -> HttpResponse:
     """Alterna o status Ativo / Inativo (`is_active`) de um `TeamMember`."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     member = get_object_or_404(TeamMember, pk=member_id)
     member.is_active = not member.is_active
     member.save(update_fields=["is_active"])
@@ -1721,6 +2048,8 @@ def team_member_delete_view(request: HttpRequest, member_id: int) -> HttpRespons
     Exclui um `TeamMember` e limpa `assignee=None` + `assigned_to=""`
     nas tarefas que estavam atribuídas a ele.
     """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
     member = get_object_or_404(TeamMember, pk=member_id)
     handle = member.handle
     name = member.name
@@ -1739,6 +2068,8 @@ def team_member_delete_view(request: HttpRequest, member_id: int) -> HttpRespons
 @require_POST
 def vault_credential_save_view(request: HttpRequest) -> HttpResponse:
     """Cria ou edita uma credencial (`CredentialEntry`) criptografando a senha/token com segurança."""
+    if not can_user_access_vault(request.user):
+        return HttpResponseForbidden("Acesso negado ao Cofre de Credenciais.")
     cred_id = request.POST.get("credential_id", "").strip()
     title = request.POST.get("title", "").strip()[:150]
     category = request.POST.get("category", CredentialEntry.Category.EMAIL).strip()
@@ -1819,7 +2150,9 @@ def vault_credential_save_view(request: HttpRequest) -> HttpResponse:
 
 @require_POST
 def vault_credential_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
-    """Exclui uma credencial do Cofre (`CredentialEntry`)."""
+    """Exclui uma credencial do Cofre (`CredentialEntry`). Exclusivo para Admin Geral."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Apenas o Administrador Geral pode excluir credenciais do Cofre.")
     cred = get_object_or_404(CredentialEntry, pk=pk)
     title = cred.title
     cred.delete()
@@ -1831,11 +2164,13 @@ def vault_credential_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @require_GET
-def vault_credential_secret_view(request: HttpRequest, pk: int) -> JsonResponse:
+def vault_credential_secret_view(request: HttpRequest, pk: int) -> HttpResponse:
     """
     Endpoint seguro sob demanda (`GET /vault/<int:pk>/secret/`) para revelar ou copiar
     a senha descriptografada sem nunca expô-la no HTML estático inicial.
     """
+    if not can_user_access_vault(request.user):
+        return HttpResponseForbidden("Acesso negado ao Cofre de Credenciais.")
     cred = get_object_or_404(CredentialEntry, pk=pk)
     return JsonResponse(
         {
@@ -1845,5 +2180,281 @@ def vault_credential_secret_view(request: HttpRequest, pk: int) -> JsonResponse:
             "username_or_email": cred.username_or_email,
             "secret": cred.get_secret(),
         }
+    )
+
+
+# --- TELA DEDICADA DE USUÁRIOS & ACESSOS (/?view=users) ---
+
+@require_POST
+def user_account_save_view(request: HttpRequest) -> HttpResponse:
+    """
+    Cria ou edita um Usuário (`User`) e sincroniza seu perfil `TeamMember`
+    diretamente na visão `/?view=users` (sem precisar acessar o Django Admin).
+    """
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+
+    User = get_user_model()
+    user_id = request.POST.get("user_id", "").strip()
+    existing_member_id = request.POST.get("team_member_id", "").strip()
+    full_name = (request.POST.get("full_name") or request.POST.get("name") or "").strip()[:100]
+    raw_handle = (request.POST.get("handle") or "").strip().lstrip("@").lower()
+    role = (request.POST.get("role") or "").strip()[:100]
+    username = (request.POST.get("username") or "").strip().lstrip("@")[:150]
+    email = (request.POST.get("email") or "").strip()[:254]
+    password = (request.POST.get("password") or "").strip()
+    accent_color = (request.POST.get("accent_color") or "#3b82f6").strip()
+    if accent_color not in ("#3b82f6", "#f97316"):
+        accent_color = "#3b82f6"
+
+    can_access_vault = request.POST.get("can_access_vault") in ("1", "true", "on")
+    is_superuser_flag = request.POST.get("is_superuser") in ("1", "true", "on")
+    is_active_flag = (
+        request.POST.get("is_active") in ("1", "true", "on")
+        if "is_active" in request.POST
+        else True
+    )
+
+    if not username:
+        return render_dashboard_or_partial(
+            request,
+            feedback_message="Informe o login (username) de acesso do usuário.",
+            feedback_level="warning",
+        )
+
+    unlinked_member = None
+    if existing_member_id.isdigit():
+        unlinked_member = TeamMember.objects.filter(pk=int(existing_member_id), user__isnull=True).first()
+        if unlinked_member and not raw_handle:
+            raw_handle = unlinked_member.handle
+        if unlinked_member and not full_name:
+            full_name = unlinked_member.name
+        if unlinked_member and not role:
+            role = unlinked_member.role
+
+    if not full_name:
+        full_name = username.capitalize()
+    handle = slugify(raw_handle or username or full_name).replace("-", "")[:50] or "membro"
+
+    if user_id.isdigit():
+        target_user = get_object_or_404(User.objects.select_related("team_profile"), pk=int(user_id))
+
+        # Trava Anti-Auto-Bloqueio para o próprio Admin Geral logado
+        if request.user.is_authenticated and target_user.pk == request.user.pk:
+            if "is_active" in request.POST and not is_active_flag:
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message="Trava de segurança: você não pode desativar sua própria conta de acesso.",
+                    feedback_level="warning",
+                )
+            if "is_superuser" in request.POST and not is_superuser_flag:
+                return render_dashboard_or_partial(
+                    request,
+                    feedback_message="Trava de segurança: você não pode remover seu próprio privilégio de Admin Geral.",
+                    feedback_level="warning",
+                )
+
+        if User.objects.filter(username__iexact=username).exclude(pk=target_user.pk).exists():
+            return render_dashboard_or_partial(
+                request,
+                feedback_message=f'O login "{username}" já está em uso por outro usuário.',
+                feedback_level="warning",
+            )
+
+        if password and len(password) < 6:
+            return render_dashboard_or_partial(
+                request,
+                feedback_message="A nova senha deve possuir no mínimo 6 caracteres.",
+                feedback_level="warning",
+            )
+
+        current_profile = getattr(target_user, "team_profile", None) if hasattr(target_user, "team_profile") else None
+        dup_handle_qs = TeamMember.objects.filter(handle__iexact=handle)
+        if current_profile:
+            dup_handle_qs = dup_handle_qs.exclude(pk=current_profile.pk)
+        elif unlinked_member:
+            dup_handle_qs = dup_handle_qs.exclude(pk=unlinked_member.pk)
+        if dup_handle_qs.exists():
+            return render_dashboard_or_partial(
+                request,
+                feedback_message=f'O handle "@{handle}" já está vinculado a outro membro da equipe.',
+                feedback_level="warning",
+            )
+
+        target_user.username = username
+        target_user.email = email
+        target_user.first_name = full_name[:150]
+        if "is_superuser" in request.POST:
+            target_user.is_superuser = is_superuser_flag
+            target_user.is_staff = is_superuser_flag
+        if "is_active" in request.POST:
+            target_user.is_active = is_active_flag
+        if password:
+            target_user.set_password(password)
+            if request.user.is_authenticated and target_user.pk == request.user.pk:
+                update_session_auth_hash(request, target_user)
+        target_user.save()
+
+        profile = current_profile or unlinked_member
+        if profile:
+            profile.user = target_user
+            profile.name = full_name
+            profile.handle = handle
+            profile.role = role
+            profile.accent_color = accent_color
+            profile.can_access_vault = bool(can_access_vault or target_user.is_superuser)
+            profile.is_active = target_user.is_active
+            profile.save()
+        else:
+            profile = TeamMember.objects.create(
+                user=target_user,
+                name=full_name,
+                handle=handle,
+                role=role,
+                accent_color=accent_color,
+                can_access_vault=bool(can_access_vault or target_user.is_superuser),
+                is_active=target_user.is_active,
+            )
+
+        Task.objects.filter(assignee=profile).update(assigned_to=f"@{profile.handle}")
+        Task.objects.filter(assignee=profile, owner__isnull=True).update(owner=target_user)
+        msg = f'Conta de "{full_name}" (login: {target_user.username} / @{profile.handle}) atualizada com sucesso.'
+    else:
+        if User.objects.filter(username__iexact=username).exists():
+            return render_dashboard_or_partial(
+                request,
+                feedback_message=f'O login "{username}" já está em uso por outro usuário.',
+                feedback_level="warning",
+            )
+
+        if not password or len(password) < 6:
+            return render_dashboard_or_partial(
+                request,
+                feedback_message="Informe uma senha com no mínimo 6 caracteres para criar o usuário.",
+                feedback_level="warning",
+            )
+
+        dup_handle_qs = TeamMember.objects.filter(handle__iexact=handle)
+        if unlinked_member:
+            dup_handle_qs = dup_handle_qs.exclude(pk=unlinked_member.pk)
+        if dup_handle_qs.exists():
+            return render_dashboard_or_partial(
+                request,
+                feedback_message=f'O handle "@{handle}" já está em uso por outro membro da equipe.',
+                feedback_level="warning",
+            )
+
+        new_user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=full_name[:150],
+        )
+        new_user.is_superuser = is_superuser_flag
+        new_user.is_staff = is_superuser_flag
+        new_user.is_active = is_active_flag
+        new_user.save()
+
+        if unlinked_member:
+            profile = unlinked_member
+            profile.user = new_user
+            profile.name = full_name
+            profile.handle = handle
+            if role:
+                profile.role = role
+            profile.accent_color = accent_color
+            profile.can_access_vault = bool(can_access_vault or is_superuser_flag)
+            profile.is_active = is_active_flag
+            profile.save()
+        else:
+            profile = TeamMember.objects.create(
+                user=new_user,
+                name=full_name,
+                handle=handle,
+                role=role,
+                accent_color=accent_color,
+                can_access_vault=bool(can_access_vault or is_superuser_flag),
+                is_active=is_active_flag,
+            )
+
+        Task.objects.filter(
+            assignee__isnull=True, assigned_to__iexact=f"@{profile.handle}"
+        ).update(assignee=profile, assigned_to=f"@{profile.handle}")
+        Task.objects.filter(assignee=profile, owner__isnull=True).update(owner=new_user)
+        msg = f'Novo usuário "{full_name}" (login: {new_user.username} / @{profile.handle}) criado com sucesso!'
+
+    return render_dashboard_or_partial(
+        request,
+        feedback_message=msg,
+        feedback_level="info",
+    )
+
+
+@require_POST
+def user_toggle_active_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Alterna em 1 clique o status ativo/inativo (`is_active`) de um usuário."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+
+    User = get_user_model()
+    target_user = get_object_or_404(User.objects.select_related("team_profile"), pk=pk)
+
+    if request.user.is_authenticated and target_user.pk == request.user.pk:
+        return render_dashboard_or_partial(
+            request,
+            feedback_message="Trava de segurança: você não pode desativar sua própria conta de acesso.",
+            feedback_level="warning",
+        )
+
+    target_user.is_active = not target_user.is_active
+    target_user.save(update_fields=["is_active"])
+
+    profile = getattr(target_user, "team_profile", None) if hasattr(target_user, "team_profile") else None
+    if profile:
+        profile.is_active = target_user.is_active
+        profile.save(update_fields=["is_active"])
+
+    state_str = "ATIVADA" if target_user.is_active else "DESATIVADA"
+    return render_dashboard_or_partial(
+        request,
+        feedback_message=f'Conta de "{target_user.username}" foi {state_str}.',
+        feedback_level="info" if target_user.is_active else "warning",
+    )
+
+
+@require_POST
+def user_toggle_vault_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Alterna em 1 clique a permissão `can_access_vault` de um usuário (criando TeamMember se necessário)."""
+    if not is_general_admin(request.user):
+        return HttpResponseForbidden("Acesso restrito ao Administrador Geral.")
+
+    User = get_user_model()
+    target_user = get_object_or_404(User.objects.select_related("team_profile"), pk=pk)
+    profile = getattr(target_user, "team_profile", None) if hasattr(target_user, "team_profile") else None
+
+    if not profile:
+        base_handle = slugify(target_user.username).replace("-", "")[:45] or "membro"
+        handle = base_handle
+        suffix = 1
+        while TeamMember.objects.filter(handle__iexact=handle).exists():
+            handle = f"{base_handle}{suffix}"
+            suffix += 1
+        profile = TeamMember.objects.create(
+            user=target_user,
+            name=target_user.get_full_name() or target_user.username.capitalize(),
+            handle=handle,
+            role="Admin Geral" if target_user.is_superuser else "Colaborador",
+            can_access_vault=False,
+            is_active=target_user.is_active,
+        )
+
+    profile.can_access_vault = not profile.can_access_vault
+    profile.save(update_fields=["can_access_vault"])
+
+    state_str = "LIBERADO" if profile.can_access_vault else "REVOGADO"
+    return render_dashboard_or_partial(
+        request,
+        feedback_message=f'Acesso ao Cofre {state_str} para @{profile.handle} ({target_user.username}).',
+        feedback_level="info" if profile.can_access_vault else "warning",
     )
 

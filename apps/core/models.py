@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -82,6 +83,14 @@ class Project(models.Model):
 class TeamMember(models.Model):
     """Membros da equipe / parceiros para atribuição rápida (@handle) nas tarefas."""
 
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="team_profile",
+        verbose_name="Usuário do Sistema",
+    )
     name = models.CharField("Nome", max_length=80)
     handle = models.SlugField("Handle (sem @)", max_length=50, unique=True)
     role = models.CharField("Função / Cargo", max_length=100, blank=True, default="")
@@ -91,6 +100,11 @@ class TeamMember(models.Model):
         max_length=7,
         default="#3b82f6",
         help_text="Permitido pelo Design System: #3b82f6 (Azul) ou #f97316 (Laranja).",
+    )
+    can_access_vault = models.BooleanField(
+        "Acesso ao Cofre",
+        default=False,
+        help_text="Permite ver, copiar, criar e editar credenciais no Cofre.",
     )
     is_active = models.BooleanField("Ativo", default=True)
     created_at = models.DateTimeField("Criado em", auto_now_add=True)

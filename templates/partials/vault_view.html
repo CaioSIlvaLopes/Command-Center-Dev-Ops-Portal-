@@ -583,6 +583,7 @@
                         Editar
                     </button>
 
+                    {% if is_general_admin %}
                     <button
                         type="button"
                         hx-post="{% url 'tasks:vault_delete' cred.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault&vault_category={{ vault_category }}"
@@ -593,6 +594,7 @@
                     >
                         Excluir
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -765,6 +767,7 @@
                                     Editar
                                 </button>
 
+                                {% if is_general_admin %}
                                 <button
                                     type="button"
                                     hx-post="{% url 'tasks:vault_delete' cred.id %}?workspace={{ current_workspace_slug }}&project={{ current_project_id }}&view=vault&vault_category={{ vault_category }}"
@@ -775,6 +778,7 @@
                                 >
                                     Excluir
                                 </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

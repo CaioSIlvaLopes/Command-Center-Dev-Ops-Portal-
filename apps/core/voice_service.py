@@ -289,6 +289,7 @@ def process_audio_with_gemini_free_tier(
     extra_hint: str = "",
     current_workspace_slug: Optional[str] = None,
     sender: str = "",
+    owner=None,
 ) -> dict:
     """
     Processa um áudio (do Gravador Web ou de um Quote explícito no WhatsApp) aplicando:
@@ -352,6 +353,7 @@ def process_audio_with_gemini_free_tier(
             source=source,
             current_workspace_slug=current_workspace_slug,
             sender=sender,
+            owner=owner,
         )
     else:
         raw_spoken = (transcript_fallback or extra_hint or "").strip()
@@ -364,6 +366,7 @@ def process_audio_with_gemini_free_tier(
             source=source,
             current_workspace_slug=current_workspace_slug,
             sender=sender,
+            owner=owner,
         )
         task = sync_result["task"]
         if not task.notes:

@@ -30,16 +30,16 @@
     x-init="focusActiveWorkspace()"
     @resize.window="updateScrollState()"
     @htmx:after-swap.window="focusActiveWorkspace()"
-    class="flex items-center w-full min-w-0"
+    class="flex flex-col lg:flex-row lg:items-center gap-2 w-full min-w-0"
 >
     <!-- Bandeja Entalhada (.ds-layer-inset) Escalável com Botão Fixo 'Todas as Frentes', Setas Dinâmicas e Trilho Rolável -->
-    <div class="flex items-center gap-1.5 px-2 ds-layer-inset ds-r-16 min-w-0 max-w-full w-full">
+    <div class="flex items-center gap-1.5 px-2 ds-layer-inset ds-r-16 min-w-0 max-w-full flex-1">
         <!-- Botão Fixo à Esquerda: Todas as Frentes -->
         <div class="py-2 shrink-0">
             <button
                 type="button"
                 id="ws-pill-all"
-                hx-get="{% url 'tasks:dashboard' %}?workspace=all&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace=all&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -78,7 +78,7 @@
                 id="ws-pill-{{ forloop.counter }}"
                 data-ws-slug="{{ ws.slug }}"
                 data-ws-active="{% if current_workspace_slug == ws.slug %}true{% else %}false{% endif %}"
-                hx-get="{% url 'tasks:dashboard' %}?workspace={{ ws.slug }}&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+                hx-get="{% url 'tasks:dashboard' %}?workspace={{ ws.slug }}&project={{ current_project_id }}&view={{ view_mode }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}{% if is_general_admin %}&user_filter={{ current_user_filter|default:'me' }}{% endif %}"
                 hx-target="#dashboard-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -107,4 +107,36 @@
             &gt;
         </button>
     </div>
+
+    {% if is_general_admin %}
+    <!-- Seletor Tátil Compacto de Filtro de Usuário (Exclusivo Admin Geral) -->
+    <div class="flex items-center justify-between sm:justify-start gap-2 px-3 py-2 ds-layer-inset ds-r-12 shrink-0 min-w-0">
+        <span class="text-[10px] font-mono uppercase tracking-wider ds-urgent-text font-bold shrink-0">
+            Fila:
+        </span>
+        <select
+            id="admin-user-filter-select"
+            name="user_filter"
+            hx-get="{% url 'tasks:dashboard' %}?workspace={{ current_workspace_slug|default:'all' }}&project={{ current_project_id }}&view={{ view_mode|default:'focus' }}{% if view_mode == 'list' %}&sort={{ list_sort|default:'arrival_desc' }}&status_filter={{ list_status_filter|default:'active' }}{% endif %}"
+            hx-trigger="change"
+            hx-target="#dashboard-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            class="bg-transparent text-xs font-mono font-semibold ds-text-primary focus:outline-none cursor-pointer truncate min-w-0 max-w-[200px] sm:max-w-[230px]"
+            title="Filtrar tarefas por usuário (Exclusivo Admin Geral)"
+        >
+            <option value="me" class="ds-bg-surface ds-text-primary" {% if current_user_filter == 'me' or not current_user_filter %}selected{% endif %}>
+                Minhas Tarefas
+            </option>
+            <option value="all" class="ds-bg-surface ds-text-primary" {% if current_user_filter == 'all' %}selected{% endif %}>
+                Todos os Usuários
+            </option>
+            {% for u in filterable_users %}
+            <option value="{{ u.id }}" class="ds-bg-surface ds-text-primary" {% if current_user_filter == u.id|stringformat:"s" %}selected{% endif %}>
+                {% if u.team_profile %}{{ u.team_profile.name }} (@{{ u.team_profile.handle }}){% else %}{{ u.get_full_name|default:u.username }} (@{{ u.username }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
 </div>

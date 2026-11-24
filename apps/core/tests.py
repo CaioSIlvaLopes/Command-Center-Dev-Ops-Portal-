@@ -1,7 +1,7 @@
 import json
 from datetime import date
 from django.core.management import call_command
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 
 from apps.core.models import Workspace, Project, TeamMember
@@ -11,6 +11,7 @@ from apps.timetracker.models import TimeLog
 from apps.integrations.models import WebhookEvent
 
 
+@override_settings(REQUIRE_AUTH=False)
 class CommandCenterTests(TestCase):
     def setUp(self):
         call_command("seed_command_center")
@@ -984,6 +985,436 @@ class CommandCenterTests(TestCase):
             self.client.force_login(admin_user)
             resp_auth_home = self.client.get("/")
             self.assertEqual(resp_auth_home.status_code, 200)
+
+    def test_phase10_multiuser_isolation_anti_idor_top3_timer_and_vault_permissions(self):
+        from django.contrib.auth.models import User
+        from apps.core.models import CredentialEntry
+
+        ws_wsa = Workspace.objects.get(slug="wsa")
+        ws_saas = Workspace.objects.get(slug="saas")
+        ws_ecom = Workspace.objects.get(slug="ecom")
+        member_pedro = TeamMember.objects.get(handle="pedro")
+        member_monica = TeamMember.objects.get(handle="monica")
+
+        admin_user = User.objects.create_superuser(
+            username="admin_caio",
+            email="caio@wsacreative.com.br",
+            password="AdminPass2026!",
+        )
+        user_pedro = User.objects.create_user(
+            username="pedro_dev",
+            email="pedro@wsacreative.com.br",
+            password="PedroPass2026!",
+        )
+        user_monica = User.objects.create_user(
+            username="monica_ops",
+            email="monica@wsacreative.com.br",
+            password="MonicaPass2026!",
+        )
+
+        member_pedro.user = user_pedro
+        member_pedro.can_access_vault = False
+        member_pedro.save()
+
+        member_monica.user = user_monica
+        member_monica.can_access_vault = True
+        member_monica.save()
+
+        # 1. Criação de tarefas via Admin/Webhook vs Usuário Comum
+        # Admin criando com @pedro atribui owner = user_pedro
+        task_assigned_by_admin = parse_and_create_task(
+            "Task delegada pelo Admin #saas @pedro !top3",
+            owner=admin_user,
+        )
+        self.assertEqual(task_assigned_by_admin.owner, user_pedro)
+        self.assertEqual(task_assigned_by_admin.assignee, member_pedro)
+
+        # Usuário comum tentando criar tarefa com @monica força owner = user_pedro
+        self.client.force_login(user_pedro)
+        self.client.post(
+            "/tasks/command/",
+            {"command": "Task criada por Pedro #saas @monica"},
+            HTTP_HX_REQUEST="true",
+        )
+        pedro_created_task = Task.objects.filter(title="Task criada por Pedro").first()
+        self.assertIsNotNone(pedro_created_task)
+        self.assertEqual(pedro_created_task.owner, user_pedro)
+
+        # Tarefa exclusiva do Admin (sem relação com Pedro)
+        admin_only_task = Task.objects.create(
+            workspace=ws_wsa,
+            owner=admin_user,
+            title="Contrato Confidencial Admin",
+            status=Task.Status.TODO,
+            impact=5,
+            urgency=5,
+            is_top_three=True,
+        )
+        admin_subtask = SubTask.objects.create(
+            task=admin_only_task,
+            title="Subtarefa Secreta Admin",
+            is_done=False,
+        )
+
+        # 2. Isolamento de Visibilidade no Dashboard (Pedro não vê tarefa do Admin, mesmo tentando ?user_filter=all)
+        resp_pedro_dash = self.client.get("/?user_filter=all")
+        self.assertEqual(resp_pedro_dash.status_code, 200)
+        pedro_html = resp_pedro_dash.content.decode("utf-8")
+        self.assertIn("Task delegada pelo Admin", pedro_html)
+        self.assertNotIn("Contrato Confidencial Admin", pedro_html)
+        self.assertEqual(resp_pedro_dash.context["current_user_filter"], "me")
+        self.assertFalse(resp_pedro_dash.context["is_general_admin"])
+
+        # Admin com ?user_filter=all vê todas, e com ?user_filter=<pedro.id> filtra por Pedro
+        self.client.force_login(admin_user)
+        resp_admin_all = self.client.get("/?user_filter=all")
+        self.assertEqual(resp_admin_all.status_code, 200)
+        admin_all_html = resp_admin_all.content.decode("utf-8")
+        self.assertIn("Task delegada pelo Admin", admin_all_html)
+        self.assertIn("Contrato Confidencial Admin", admin_all_html)
+
+        resp_admin_pedro = self.client.get(f"/?user_filter={user_pedro.id}")
+        self.assertEqual(resp_admin_pedro.status_code, 200)
+        admin_pedro_html = resp_admin_pedro.content.decode("utf-8")
+        self.assertIn("Task delegada pelo Admin", admin_pedro_html)
+        self.assertNotIn("Contrato Confidencial Admin", admin_pedro_html)
+
+        # 3. Top 3 Isolado por Usuário (Pedro ter 3 tarefas Top 3 não rebaixa o Top 3 do Admin)
+        for idx in range(4):
+            Task.objects.create(
+                workspace=ws_saas,
+                owner=user_pedro,
+                title=f"Pedro Top Task {idx}",
+                status=Task.Status.TODO,
+                is_top_three=True,
+            )
+        admin_only_task.refresh_from_db()
+        self.assertTrue(admin_only_task.is_top_three)
+        self.assertEqual(
+            Task.objects.filter(owner=user_pedro, is_top_three=True).exclude(status=Task.Status.DONE).count(),
+            3,
+        )
+
+        # 4. Timer Isolado por Usuário (Play de Pedro não pausa Timer em andamento do Admin)
+        self.client.force_login(admin_user)
+        self.client.post(f"/timetracker/start/{admin_only_task.id}/")
+        admin_log = TimeLog.objects.filter(task=admin_only_task, user=admin_user, is_running=True).first()
+        self.assertIsNotNone(admin_log)
+
+        self.client.force_login(user_pedro)
+        self.client.post(f"/timetracker/start/{task_assigned_by_admin.id}/")
+        pedro_log = TimeLog.objects.filter(task=task_assigned_by_admin, user=user_pedro, is_running=True).first()
+        self.assertIsNotNone(pedro_log)
+
+        admin_log.refresh_from_db()
+        self.assertTrue(admin_log.is_running)
+
+        # 5. Proteção Anti-IDOR (Pedro tentando acessar/modificar tarefa do Admin recebe 403)
+        idor_get = self.client.get(f"/tasks/{admin_only_task.id}/detail/")
+        self.assertEqual(idor_get.status_code, 403)
+
+        idor_post_urls = [
+            f"/tasks/{admin_only_task.id}/update/",
+            f"/tasks/{admin_only_task.id}/move/",
+            f"/tasks/{admin_only_task.id}/status/",
+            f"/tasks/{admin_only_task.id}/shift/",
+            f"/tasks/{admin_only_task.id}/triage/",
+            f"/tasks/{admin_only_task.id}/priority/",
+            f"/tasks/{admin_only_task.id}/delete/",
+            f"/tasks/{admin_only_task.id}/toggle-top3/",
+            f"/tasks/{admin_only_task.id}/assign/",
+            f"/tasks/{admin_only_task.id}/ai-subtasks/",
+            f"/tasks/{admin_only_task.id}/subtasks/add/",
+            f"/tasks/subtasks/{admin_subtask.id}/toggle/",
+            f"/tasks/subtasks/{admin_subtask.id}/delete/",
+            f"/timetracker/start/{admin_only_task.id}/",
+            f"/timetracker/manual/{admin_only_task.id}/",
+            f"/timetracker/log/{admin_log.id}/delete/",
+        ]
+        for url in idor_post_urls:
+            resp_idor = self.client.post(url)
+            self.assertEqual(resp_idor.status_code, 403, f"Falha Anti-IDOR em {url}")
+
+        # 6. Permissões do Cofre (Vault) e Áreas Exclusivas do Admin Geral
+        cred = CredentialEntry.objects.create(
+            workspace=ws_ecom,
+            title="Credencial Teste Multiusuário",
+            category=CredentialEntry.Category.ECOMMERCE,
+            username_or_email="loja@teste.com",
+        )
+        cred.set_secret("SegredoCofre123!")
+        cred.save()
+
+        # Pedro (can_access_vault=False) -> 403 em tudo do Cofre e em áreas Admin, e UI oculta itens restritos
+        self.assertNotIn("admin-user-filter-select", pedro_html)
+        self.assertNotIn("btn-audio-ia-modal", pedro_html)
+        self.assertNotIn("btn-gemini-clipboard-sync", pedro_html)
+        self.assertNotIn("Cofre &amp; Senhas", pedro_html)
+        self.assertNotIn("Gestão &amp; Cadastros", pedro_html)
+        self.assertNotIn("Integrações &amp; Logs", pedro_html)
+        self.assertIn("@pedro_dev", pedro_html)
+        self.assertIn("Equipe", pedro_html)
+
+        self.assertEqual(self.client.get("/?view=vault").status_code, 403)
+        self.assertEqual(self.client.get(f"/vault/{cred.id}/secret/").status_code, 403)
+        self.assertEqual(
+            self.client.post("/vault/save/", {"title": "X", "username_or_email": "x@x.com"}).status_code,
+            403,
+        )
+        self.assertEqual(self.client.post(f"/vault/{cred.id}/delete/").status_code, 403)
+        self.assertEqual(self.client.get("/?view=integrations").status_code, 403)
+        self.assertEqual(self.client.get("/?view=settings").status_code, 403)
+        self.assertEqual(self.client.post("/settings/workspaces/save/", {"name": "Hack"}).status_code, 403)
+        self.assertEqual(self.client.post("/tasks/simulate-webhook/").status_code, 403)
+        self.assertEqual(self.client.post("/tasks/recalculate/").status_code, 403)
+
+        # Mônica (can_access_vault=True, mas não é superuser) -> Pode ver, revelar, criar e editar, mas NÃO pode deletar (403 e botão oculto)
+        self.client.force_login(user_monica)
+        resp_monica_vault = self.client.get("/?view=vault")
+        self.assertEqual(resp_monica_vault.status_code, 200)
+        monica_vault_html = resp_monica_vault.content.decode("utf-8")
+        self.assertIn("Cofre &amp; Senhas", monica_vault_html)
+        self.assertNotIn("Gestão &amp; Cadastros", monica_vault_html)
+        self.assertNotIn(f"/vault/{cred.id}/delete/", monica_vault_html)
+
+        self.assertEqual(self.client.get(f"/vault/{cred.id}/secret/").status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                "/vault/save/",
+                {
+                    "workspace_id": str(ws_ecom.id),
+                    "title": "Nova Credencial Monica",
+                    "category": "email",
+                    "username_or_email": "monica@ecom.com",
+                    "secret": "SenhaMonica!",
+                },
+            ).status_code,
+            200,
+        )
+        new_monica_cred = CredentialEntry.objects.filter(title="Nova Credencial Monica").first()
+        self.assertIsNotNone(new_monica_cred)
+        # Mônica também pode editar uma credencial existente
+        self.assertEqual(
+            self.client.post(
+                "/vault/save/",
+                {
+                    "credential_id": str(new_monica_cred.id),
+                    "workspace_id": str(ws_ecom.id),
+                    "title": "Nova Credencial Monica Editada",
+                    "category": "email",
+                    "username_or_email": "monica@ecom.com",
+                    "secret": "",
+                },
+            ).status_code,
+            200,
+        )
+        new_monica_cred.refresh_from_db()
+        self.assertEqual(new_monica_cred.title, "Nova Credencial Monica Editada")
+        self.assertEqual(self.client.post(f"/vault/{cred.id}/delete/").status_code, 403)
+        self.assertTrue(CredentialEntry.objects.filter(pk=cred.id).exists())
+
+        # 7. Gestão de Logins e Permissões do Cofre pelo Admin Geral em /settings/members/save/
+        self.client.force_login(admin_user)
+        self.assertIn("admin-user-filter-select", admin_all_html)
+        self.assertIn("btn-audio-ia-modal", admin_all_html)
+        self.assertIn("btn-gemini-clipboard-sync", admin_all_html)
+
+        resp_create_member = self.client.post(
+            "/settings/members/save/",
+            {
+                "view": "settings",
+                "name": "Lucas Ops",
+                "handle": "lucas",
+                "role": "DevOps",
+                "accent_color": "#f97316",
+                "username": "lucas_login",
+                "password": "LucasStrongPassword2026!",
+                "can_access_vault": "1",
+                "is_superuser": "0",
+                "user_is_active": "1",
+            },
+        )
+        self.assertEqual(resp_create_member.status_code, 200)
+        member_lucas = TeamMember.objects.select_related("user").filter(handle="lucas").first()
+        self.assertIsNotNone(member_lucas)
+        self.assertIsNotNone(member_lucas.user)
+        self.assertEqual(member_lucas.user.username, "lucas_login")
+        self.assertTrue(member_lucas.user.check_password("LucasStrongPassword2026!"))
+        self.assertTrue(member_lucas.can_access_vault)
+        self.assertFalse(member_lucas.user.is_superuser)
+
+        # Proteção contra auto-bloqueio do próprio Admin Geral
+        member_caio = TeamMember.objects.filter(handle="caio").first()
+        if member_caio:
+            member_caio.user = admin_user
+            member_caio.save()
+            self.client.post(
+                "/settings/members/save/",
+                {
+                    "member_id": str(member_caio.id),
+                    "name": member_caio.name,
+                    "handle": member_caio.handle,
+                    "username": admin_user.username,
+                    "is_superuser": "0",
+                    "user_is_active": "0",
+                },
+            )
+            admin_user.refresh_from_db()
+            self.assertTrue(admin_user.is_superuser)
+            self.assertTrue(admin_user.is_active)
+
+        # 8. Verificação estrita de zero cores proibidas em todas as telas renderizadas
+        resp_settings = self.client.get("/?view=settings")
+        self.assertEqual(resp_settings.status_code, 200)
+        settings_html = resp_settings.content.decode("utf-8")
+        forbidden = ["purple", "violet", "indigo", "emerald", "teal", "bg-green", "text-green"]
+        for html_doc in (pedro_html, monica_vault_html, admin_all_html, settings_html):
+            for word in forbidden:
+                self.assertNotIn(word, html_doc.lower())
+
+    def test_phase11_users_access_view_crud_toggles_anti_lockout_and_permissions(self):
+        from django.contrib.auth.models import User
+
+        admin_user = User.objects.create_superuser(
+            username="caio_root",
+            email="caio@wsacreative.com.br",
+            password="RootPassword2026!",
+        )
+        regular_user = User.objects.create_user(
+            username="colab_comum",
+            email="colab@wsacreative.com.br",
+            password="ColabPassword2026!",
+        )
+
+        # 1. Colaborador comum recebe redirecionamento (302 -> /?view=focus) em GET /?view=users
+        #    e HTTP 403 em /users/save/, /users/<pk>/toggle-active/ e /users/<pk>/toggle-vault/
+        self.client.force_login(regular_user)
+        resp_get_users_non_admin = self.client.get("/?view=users")
+        self.assertEqual(resp_get_users_non_admin.status_code, 302)
+        self.assertIn("view=focus", resp_get_users_non_admin["Location"])
+
+        self.assertEqual(
+            self.client.post(
+                "/users/save/",
+                {"username": "hack_user", "password": "HackPassword123!", "full_name": "Hack"},
+            ).status_code,
+            403,
+        )
+        self.assertEqual(self.client.post(f"/users/{admin_user.id}/toggle-active/").status_code, 403)
+        self.assertEqual(self.client.post(f"/users/{regular_user.id}/toggle-vault/").status_code, 403)
+
+        # 2. Admin Geral acessa /?view=users e verifica zero cores proibidas
+        self.client.force_login(admin_user)
+        resp_users_view = self.client.get("/?view=users")
+        self.assertEqual(resp_users_view.status_code, 200)
+        users_html = resp_users_view.content.decode("utf-8")
+        self.assertIn('id="users-access-view-section"', users_html)
+        self.assertIn("Usuários &amp; Acessos", users_html)
+
+        forbidden = ["purple", "violet", "indigo", "emerald", "teal", "bg-green", "text-green"]
+        for word in forbidden:
+            self.assertNotIn(word, users_html.lower())
+
+        # 3. Admin Geral cria um novo usuário com TeamMember sincronizado via POST /users/save/
+        resp_create = self.client.post(
+            "/users/save/",
+            {
+                "view": "users",
+                "full_name": "Rafael Designer",
+                "handle": "rafael",
+                "role": "UI/UX Designer",
+                "username": "rafael_wsa",
+                "email": "rafael@wsacreative.com.br",
+                "password": "RafaelPassword2026!",
+                "accent_color": "#f97316",
+                "can_access_vault": "0",
+                "is_superuser": "0",
+                "is_active": "1",
+            },
+        )
+        self.assertEqual(resp_create.status_code, 200)
+        rafael_user = User.objects.select_related("team_profile").filter(username="rafael_wsa").first()
+        self.assertIsNotNone(rafael_user)
+        self.assertTrue(rafael_user.is_active)
+        self.assertFalse(rafael_user.is_superuser)
+        self.assertEqual(rafael_user.team_profile.handle, "rafael")
+        self.assertEqual(rafael_user.team_profile.role, "UI/UX Designer")
+        self.assertFalse(rafael_user.team_profile.can_access_vault)
+
+        # Valida login real com a nova conta criada
+        self.assertTrue(self.client.login(username="rafael_wsa", password="RafaelPassword2026!"))
+        self.client.force_login(admin_user)
+
+        # 4. Admin Geral edita dados e redefine senha via POST /users/save/
+        resp_edit = self.client.post(
+            "/users/save/",
+            {
+                "view": "users",
+                "user_id": str(rafael_user.id),
+                "full_name": "Rafael Lead Designer",
+                "handle": "rafael",
+                "role": "Lead Designer",
+                "username": "rafael_wsa",
+                "email": "rafael.lead@wsacreative.com.br",
+                "password": "NovaSenhaRafael2026!",
+                "accent_color": "#3b82f6",
+                "can_access_vault": "1",
+                "is_superuser": "0",
+                "is_active": "1",
+            },
+        )
+        self.assertEqual(resp_edit.status_code, 200)
+        rafael_user.refresh_from_db()
+        rafael_user.team_profile.refresh_from_db()
+        self.assertEqual(rafael_user.team_profile.name, "Rafael Lead Designer")
+        self.assertEqual(rafael_user.team_profile.role, "Lead Designer")
+        self.assertTrue(rafael_user.team_profile.can_access_vault)
+        self.assertTrue(rafael_user.check_password("NovaSenhaRafael2026!"))
+
+        # 5. Alternância 1-clique de toggle-vault e toggle-active
+        resp_tv = self.client.post(f"/users/{rafael_user.id}/toggle-vault/")
+        self.assertEqual(resp_tv.status_code, 200)
+        rafael_user.team_profile.refresh_from_db()
+        self.assertFalse(rafael_user.team_profile.can_access_vault)
+
+        resp_ta = self.client.post(f"/users/{rafael_user.id}/toggle-active/")
+        self.assertEqual(resp_ta.status_code, 200)
+        rafael_user.refresh_from_db()
+        self.assertFalse(rafael_user.is_active)
+
+        # 6. Trava anti-auto-bloqueio impede o Admin logado de desativar a si mesmo ou remover seu is_superuser
+        self.client.post(f"/users/{admin_user.id}/toggle-active/")
+        admin_user.refresh_from_db()
+        self.assertTrue(admin_user.is_active)
+
+        self.client.post(
+            "/users/save/",
+            {
+                "user_id": str(admin_user.id),
+                "full_name": "Caio Root",
+                "handle": "caioroot",
+                "username": admin_user.username,
+                "is_superuser": "0",
+                "is_active": "1",
+            },
+        )
+        admin_user.refresh_from_db()
+        self.assertTrue(admin_user.is_superuser)
+
+        self.client.post(
+            "/users/save/",
+            {
+                "user_id": str(admin_user.id),
+                "full_name": "Caio Root",
+                "handle": "caioroot",
+                "username": admin_user.username,
+                "is_superuser": "1",
+                "is_active": "0",
+            },
+        )
+        admin_user.refresh_from_db()
+        self.assertTrue(admin_user.is_active)
+
 
 
 

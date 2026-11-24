@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.models import Project
+from apps.core.permissions import get_default_superuser
 from apps.core.services import (
     parse_and_create_task,
     process_gemini_or_whatsapp_sync,
@@ -231,6 +232,7 @@ def process_github_webhook(event_id: int) -> dict:
             task = Task.objects.create(
                 workspace=workspace,
                 project=project,
+                owner=get_default_superuser(),
                 title=f"{prefix} {item_title}"[:255],
                 notes=item_html_url,
                 status=Task.Status.INBOX,
@@ -283,6 +285,7 @@ def process_ecommerce_webhook(event_id: int) -> dict:
         task = Task.objects.create(
             workspace=workspace,
             project=project,
+            owner=get_default_superuser(),
             title=full_title,
             status=Task.Status.INBOX,
             shift=Task.Shift.AFTERNOON,
